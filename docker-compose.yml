@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  client_a_bot:
+    image: your_bot_image:latest
+    networks:
+      - shared_network
+    environment:
+      - CLIENT_ID=client_a
+      - TELEGRAM_TOKEN=12345:ABC...
+      - API_URL=http://admin_api:8000 
+
+networks:
+  shared_network:
+    external: true                

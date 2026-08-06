@@ -1,0 +1,79 @@
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from src.ai.conversation_agent.state import AgentState
+from src.ai.conversation_agent.nodes.supervisor import classify_intent
+from src.ai.conversation_agent.nodes.answer_question import answer_question
+from src.ai.conversation_agent.nodes.info import info_agent
+from src.ai.conversation_agent.nodes.escalation import escalate
+from src.ai.conversation_agent.nodes.lead_capture import lead_capture_node
+
+
+def _route_intent(state: AgentState) -> str:
+    if isinstance(state, dict):
+        lead_step = state.get("lead_step")
+        intent = state.get("intent", "")
+    else:
+        lead_step = getattr(state, "lead_step", None)
+        intent = getattr(state, "intent", "")
+
+    if lead_step and lead_step != "completed":
+        return "lead_capture"
+
+    intent = (intent or "").lower().strip()
+
+    match intent:
+        case (
+            "faq"
+            | "faq_intent"
+            | "price_intent"
+            | "pricing"
+            | "services"
+            | "general_question"
+            | "document_intent"
+            | "greeting"
+        ):
+            return "faq"
+
+        case "info" | "info_intent" | "about_company":
+            return "info"
+
+        case "lead_intent" | "lead" | "booking" | "consultation":
+            return "lead_capture"
+
+        case _:
+            return "escalation"
+
+
+memory = MemorySaver()
+
+def build_graph() -> StateGraph:
+    graph = StateGraph(AgentState)
+
+    graph.add_node("supervisor", classify_intent)
+    graph.add_node("faq", answer_question)
+    graph.add_node("info", info_agent)
+    graph.add_node("lead_capture", lead_capture_node)
+    graph.add_node("escalation", escalate)
+
+    graph.set_entry_point("supervisor")
+
+    graph.add_conditional_edges(
+        "supervisor",
+        _route_intent,
+        {
+            "faq": "faq",
+            "info": "info",
+            "lead_capture": "lead_capture",
+            "escalation": "escalation",
+        },
+    )
+
+    graph.add_edge("faq", END)
+    graph.add_edge("info", END)
+    graph.add_edge("lead_capture", END)
+    graph.add_edge("escalation", END)
+
+    return graph.compile(checkpointer=memory)
+
+
+graph = build_graph()

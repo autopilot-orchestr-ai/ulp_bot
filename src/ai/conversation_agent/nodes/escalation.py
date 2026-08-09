@@ -3,7 +3,7 @@ from src.ai.conversation_agent.state import AgentState
 from src.config import settings
 from src.logger import log_event
 from src.ai.conversation_agent.prompts.escalation import HANDOFF_MESSAGES
-from src.bots.utils.notify_stuff import notify_staff_telegram
+from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.api_client.core_api import core_api
 from src.ai.conversation_agent.data.lang import detect_lang 
 
@@ -20,7 +20,7 @@ async def escalate(state: AgentState) -> dict:
 
     staff_notified = bool(settings.staff_telegram_chat_id)
     try:
-        await notify_staff_telegram(state.incoming.text)
+        await notify_manager_lead_telegram(state.incoming.text)
     except Exception:
         staff_notified = False
     log_event("escalation_triggered", status="ok", question=state.incoming.text, staff_notified=staff_notified)

@@ -3,7 +3,7 @@ from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message
 
-from src.schemas.messages import IncomingMessage
+from src.schemas.ai.messages import IncomingMessage
 
 from src.bots.shared.handler import handle_incoming
 from src.bots.utils.strings import MEDIA_REPLIES

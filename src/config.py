@@ -1,7 +1,4 @@
-from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
-
-load_dotenv()
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Client identity
@@ -25,6 +22,7 @@ class Settings(BaseSettings):
 
     # Knowledge base
     faq_path: str
+    website_url: str
 
     # RAG tuning
     context_window: int
@@ -40,12 +38,12 @@ class Settings(BaseSettings):
     google_service_account_json: str
 
     # Booking slot config
-    # booking_days_ahead: int
-    # booking_max_slots: int
-    # booking_slot_duration_minutes: int
-    # booking_working_hours_start: str
-    # booking_working_hours_end: str
-    # booking_working_days: str
+    booking_days_ahead: int
+    booking_max_slots: int
+    booking_slot_duration_minutes: int
+    booking_working_hours_start: str
+    booking_working_hours_end: str
+    booking_working_days: str
 
     # SMTP (booking confirmation emails)
     smtp_host: str
@@ -54,8 +52,11 @@ class Settings(BaseSettings):
     smtp_password: str
     smtp_from: str
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
 settings = Settings()
 

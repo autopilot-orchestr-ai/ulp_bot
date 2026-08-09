@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    # API Client / Backend connection
+    core_api_url: str = "http://admin_api:8000"
+
     # Client identity
     client_name: str
 

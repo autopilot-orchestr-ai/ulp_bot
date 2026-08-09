@@ -6,16 +6,22 @@ from src.ai.conversation_agent.state import AgentState
 from src.config import settings
 from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
+from src.ai.conversation_agent.data.lang import detect_lang
 from src.ai.conversation_agent.prompts.superviser import SYSTEM_PROMPT
 
 
 class IntentClassification(BaseModel):
-    intent: Literal["info_intent", "lead_intent", "greeting", "unknown"]
+    intent: Literal["info_intent", "lead_intent", "greeting", "unknown", "off_topic"]
 
 
 async def classify_intent(state: AgentState) -> dict:
     llm = get_llm(settings.llm_model)
     structured_llm = llm.with_structured_output(IntentClassification)
+
+    # Detected once here, since every message passes through this node
+    # first — downstream nodes read state.language instead of each
+    # independently re-detecting from a single, possibly-ambiguous message.
+    lang = detect_lang(state.incoming.text, default=state.language)
 
     history_messages = []
     for m in state.conversation_history[-4:]:
@@ -32,7 +38,7 @@ async def classify_intent(state: AgentState) -> dict:
             HumanMessage(content=state.incoming.text),
         ])
         log_event("intent_classified", status="ok", intent=result.intent)
-        return {"intent": result.intent}
+        return {"intent": result.intent, "language": lang}
     except Exception as exc:
         log_event("intent_classified", status="error", error=str(exc))
         raise

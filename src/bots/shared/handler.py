@@ -1,5 +1,5 @@
 from src.ai.conversation_agent.graph import graph
-from src.schemas.messages import IncomingMessage
+from src.schemas.ai.messages import IncomingMessage
 from src.api_client.core_api import core_api
 
 

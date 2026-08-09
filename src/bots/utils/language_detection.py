@@ -1,6 +1,6 @@
 from src.bots.tgbot.handlers.message import MEDIA_REPLIES
 from src.ai.conversation_agent.data.lang import detect_lang
-from src.db.functions.conversation import get_or_create_conversation, get_chat_history
+from src.api_client import core_api
 from aiogram.types import Message
 
 
@@ -9,13 +9,13 @@ async def get_client_language_from_history(client_id: str, message: Message) -> 
         return detect_lang(message.caption)
 
     try:
-        conv = await get_or_create_conversation(
+        conv = await core_api.get_or_create_conversation(
             client_id=client_id,
             channel="telegram"
         )
         if conv:
-            history = await get_chat_history(conv.id, limit=5)
-            
+            history = await core_api.get_chat_history(conv.id, limit=5)
+
             last_user_text = next(
                 (m["content"] for m in reversed(history) if m["role"] == "user" and m["content"]), 
                 None

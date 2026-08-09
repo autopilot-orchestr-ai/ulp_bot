@@ -3,6 +3,8 @@ services:
     build: .
     container_name: ulp_bot
     restart: always
+    volumes:
+      - .:/app
     env_file:
       - .env
     networks:

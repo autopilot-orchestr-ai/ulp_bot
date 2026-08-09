@@ -22,7 +22,7 @@ async def classify_intent(state: AgentState) -> dict:
     # first — downstream nodes read state.language instead of each
     # independently re-detecting from a single, possibly-ambiguous message.
     default_lang = getattr(state, "language", "uk")
-    lang = detect_lang(state.incoming.text, default=default_lang)
+    lang = detect_lang(state.incoming.text) or default_lang
 
     history_messages = []
     for m in state.conversation_history[-4:]:

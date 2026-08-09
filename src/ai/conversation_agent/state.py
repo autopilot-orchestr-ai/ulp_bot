@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 from src.schemas.ai.messages import IncomingMessage
 
@@ -18,6 +18,7 @@ class BaseState(BaseModel):
 
 class AgentState(BaseState):
     """Main graph state shared across all nodes."""
+    language: Optional[str] = "uk"  # або  = "uk"
     intent: str = ""
 
 

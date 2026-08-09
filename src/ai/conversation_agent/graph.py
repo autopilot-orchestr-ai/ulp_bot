@@ -1,95 +1,86 @@
-from aiogram.types import User
-from src.config import settings
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
+from src.ai.conversation_agent.state import AgentState
+from src.ai.conversation_agent.nodes.supervisor import classify_intent
+from src.ai.conversation_agent.nodes.answer_question import answer_question
+from src.ai.conversation_agent.nodes.info import info_agent
+from src.ai.conversation_agent.nodes.escalation import escalate
+from src.ai.conversation_agent.nodes.off_topic import off_topic_reply
+from src.ai.conversation_agent.nodes.lead_capture import lead_capture_node
 
 
-async def notify_manager_lead_telegram(
-    client_name: str,
-    client_phone: str,
-    client_email: str,
-    requested_service: str = "Other/Not specified",
-    user: User | None = None,
-    lang: str = "uk",
-) -> None:
-    """Notify manager when a client completes the lead capture form (Name, Phone, Email)."""
-    chat_id = getattr(settings, "staff_telegram_chat_id", None) or getattr(settings, "STAFF_TELEGRAM_CHAT_ID", None)
-    if not chat_id:
-        return
+def _route_intent(state: AgentState) -> str:
+    if isinstance(state, dict):
+        lead_step = state.get("lead_step")
+        intent = state.get("intent", "")
+    else:
+        lead_step = getattr(state, "lead_step", None)
+        intent = getattr(state, "intent", "")
 
-    from src.bots.tgbot.bot import bot  # ✅ lazy import — breaks the cycle
+    if lead_step and lead_step != "completed":
+        return "lead_capture"
 
-    user_info = ""
-    if user:
-        user_mention = user.mention_html(user.full_name)
-        username = f" (@{user.username})" if user.username else ""
-        user_info = (
-            f"👤 <b>Telegram акаунт:</b> {user_mention}{username}\n"
-            f"🆔 <b>ID:</b> <code>{user.id}</code>\n"
-        )
+    intent = (intent or "").lower().strip()
 
-    await bot.send_message(
-        chat_id=chat_id,
-        text=(
-            f"🎯 <b>[НОВИЙ ЛІД] Клієнт залишив заявку!</b>\n\n"
-            f"{user_info}"
-            f"📛 <b>Ім'я / ПІБ:</b> {client_name}\n"
-            f"📞 <b>Телефон:</b> <code>{client_phone}</code>\n"
-            f"✉️ <b>Email:</b> {client_email}\n"
-            f"🧾 <b>Послуга:</b> {requested_service}\n"
-            f"🌐 <b>Мова:</b> {lang.upper()}\n\n"
-            f"👉 <i>Будь ласка, зв'яжіться з клієнтом для узгодження детальностей.</i>"
-        ),
-        parse_mode="HTML",
+    match intent:
+        case (
+            "faq"
+            | "faq_intent"
+            | "price_intent"
+            | "pricing"
+            | "services"
+            | "general_question"
+            | "document_intent"
+            | "greeting"
+        ):
+            return "faq"
+
+        case "info" | "info_intent" | "about_company":
+            return "info"
+
+        case "lead_intent" | "lead" | "booking" | "consultation":
+            return "lead_capture"
+
+        case "off_topic":
+            return "off_topic"
+
+        case _:
+            return "escalation"
+
+
+memory = MemorySaver()
+
+def build_graph() -> StateGraph:
+    graph = StateGraph(AgentState)
+
+    graph.add_node("supervisor", classify_intent)
+    graph.add_node("faq", answer_question)
+    graph.add_node("info", info_agent)
+    graph.add_node("lead_capture", lead_capture_node)
+    graph.add_node("escalation", escalate)
+    graph.add_node("off_topic", off_topic_reply)
+
+    graph.set_entry_point("supervisor")
+
+    graph.add_conditional_edges(
+        "supervisor",
+        _route_intent,
+        {
+            "faq": "faq",
+            "info": "info",
+            "lead_capture": "lead_capture",
+            "escalation": "escalation",
+            "off_topic": "off_topic",
+        },
     )
 
+    graph.add_edge("faq", END)
+    graph.add_edge("info", END)
+    graph.add_edge("lead_capture", END)
+    graph.add_edge("escalation", END)
+    graph.add_edge("off_topic", END)
 
-async def notify_manager_media_telegram(user: User, content_type: str, lang: str) -> None:
-    """Notify manager about received media files (documents, images, etc.)."""
-    manager_chat_id = getattr(settings, "staff_telegram_chat_id", None) or getattr(settings, "STAFF_TELEGRAM_CHAT_ID", None)
-    if not manager_chat_id:
-        return
-
-    from src.bots.tgbot.bot import bot  # ✅ lazy import
-
-    user_mention = user.mention_html(user.full_name)
-    username = f" (@{user.username})" if user.username else ""
-
-    await bot.send_message(
-        chat_id=manager_chat_id,
-        text=(
-            f"📎 <b>[ДОКУМЕНТ] Клієнт надіслав файл!</b>\n\n"
-            f"👤 <b>Клієнт:</b> {user_mention}{username}\n"
-            f"🆔 <b>ID:</b> <code>{user.id}</code>\n"
-            f"📂 <b>Тип медіа:</b> {content_type.upper()}\n"
-            f"🌐 <b>Визначена мова:</b> {lang.upper()}\n\n"
-            f"👉 <i>Будь ласка, зв'яжіться з клієнтом для обробки документів.</i>"
-        ),
-        parse_mode="HTML",
-    )
+    return graph.compile(checkpointer=memory)
 
 
-async def notify_manager_contacts_telegram(user: User, user_text: str) -> None:
-    """Notify manager when client receives contact info."""
-    manager_chat_id = getattr(settings, "staff_telegram_chat_id", None) or getattr(settings, "STAFF_TELEGRAM_CHAT_ID", None)
-    if not manager_chat_id:
-        return
-
-    from src.bots.tgbot.bot import bot  # ✅ lazy import
-
-    user_mention = user.mention_html(user.full_name)
-    username = f" (@{user.username})" if user.username else ""
-
-    await bot.send_message(
-        chat_id=manager_chat_id,
-        text=(
-            f"🔔 <b>[КОНТАКТИ] Клієнт зацікавився послугами!</b>\n\n"
-            f"👤 <b>Клієнт:</b> {user_mention}{username}\n"
-            f"🆔 <b>ID:</b> <code>{user.id}</code>\n"
-            f"💬 <b>Останній запит:</b> <i>\"{user_text}\"</i>\n\n"
-            f"👉 <i>Клієнту було автоматично надіслано контакти для зв'язку.</i>"
-        ),
-        parse_mode="HTML",
-    )
-
-
-async def notify_staff_instagram() -> None:
-    pass
+graph = build_graph()

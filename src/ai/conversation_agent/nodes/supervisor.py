@@ -39,7 +39,12 @@ async def classify_intent(state: AgentState) -> dict:
             HumanMessage(content=state.incoming.text),
         ])
         log_event("intent_classified", status="ok", intent=result.intent)
-        return {"intent": result.intent, "language": lang}
+        return {
+            "intent": result.intent,
+            "language": lang,
+            "current_service": None,
+            "retrieved_context": None,
+        }
     except Exception as exc:
         log_event("intent_classified", status="error", error=str(exc))
         raise

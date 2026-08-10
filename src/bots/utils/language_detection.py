@@ -5,8 +5,6 @@ from aiogram.types import Message
 import re
 
 
-
-
 def is_meaningful_text(text: str) -> bool:
     if not text:
         return False
@@ -18,8 +16,20 @@ def is_meaningful_text(text: str) -> bool:
     return len(letters) >= 2
 
 
+def should_redetect_language(text: str, current_lang: str | None = None) -> bool:
+    if not is_meaningful_text(text):
+        return False
+
+    if current_lang:
+        words = text.strip().split()
+        if len(text) < 15 or len(words) < 3:
+            return False
+
+    return True
+
+
 async def get_client_language_from_history(client_id: str, message: Message) -> str:
-    if message.caption and is_meaningful_text(message.caption):
+    if message.caption and should_redetect_language(message.caption):
         detected = detect_lang(message.caption)
         if detected:
             return detected
@@ -33,7 +43,7 @@ async def get_client_language_from_history(client_id: str, message: Message) -> 
             history = await core_api.get_chat_history(conv.id, limit=10)
 
             for m in reversed(history):
-                if m["role"] == "user" and m["content"] and is_meaningful_text(m["content"]):
+                if m["role"] == "user" and m["content"] and should_redetect_language(m["content"]):
                     detected = detect_lang(m["content"])
                     if detected:
                         return detected

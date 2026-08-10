@@ -8,7 +8,7 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 from src.ai.conversation_agent.data.lang import detect_lang
 from src.ai.conversation_agent.prompts.superviser import SYSTEM_PROMPT
-from src.bots.utils.language_detection import is_meaningful_text
+from src.bots.utils.language_detection import should_redetect_language, detect_lang
 
 
 class IntentClassification(BaseModel):
@@ -21,12 +21,14 @@ async def classify_intent(state: AgentState) -> dict:
 
     default_lang = getattr(state, "language", None) or "uk"
     
-    # Визначаємо мову ТІЛЬКИ якщо в повідомленні є нормальний текст, а не лише цифри/email
-    if is_meaningful_text(state.incoming.text):
+    is_in_lead_form = getattr(state, "lead_step", None) is not None or getattr(state, "active_form", None) is not None
+
+    if is_in_lead_form:
+        lang = default_lang
+    elif should_redetect_language(state.incoming.text, current_lang=default_lang):
         detected = detect_lang(state.incoming.text)
         lang = detected if detected else default_lang
     else:
-        # Якщо ввели номер телефону чи email — залишаємо мову, яка була раніше
         lang = default_lang
 
     history_messages = []

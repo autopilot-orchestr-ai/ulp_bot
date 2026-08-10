@@ -8,6 +8,7 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 from src.ai.conversation_agent.data.lang import detect_lang
 from src.ai.conversation_agent.prompts.superviser import SYSTEM_PROMPT
+from src.bots.utils.language_detection import is_meaningful_text
 
 
 class IntentClassification(BaseModel):
@@ -18,11 +19,15 @@ async def classify_intent(state: AgentState) -> dict:
     llm = get_llm(settings.llm_model)
     structured_llm = llm.with_structured_output(IntentClassification)
 
-    # Detected once here, since every message passes through this node
-    # first — downstream nodes read state.language instead of each
-    # independently re-detecting from a single, possibly-ambiguous message.
-    default_lang = getattr(state, "language", "uk")
-    lang = detect_lang(state.incoming.text) or default_lang
+    default_lang = getattr(state, "language", None) or "uk"
+    
+    # Визначаємо мову ТІЛЬКИ якщо в повідомленні є нормальний текст, а не лише цифри/email
+    if is_meaningful_text(state.incoming.text):
+        detected = detect_lang(state.incoming.text)
+        lang = detected if detected else default_lang
+    else:
+        # Якщо ввели номер телефону чи email — залишаємо мову, яка була раніше
+        lang = default_lang
 
     history_messages = []
     for m in state.conversation_history[-4:]:

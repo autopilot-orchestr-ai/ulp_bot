@@ -1,4 +1,4 @@
-from src.bots.tgbot.handlers.message import MEDIA_REPLIES
+from src.bots.utils.strings import MEDIA_REPLIES
 from src.ai.conversation_agent.data.lang import detect_lang
 from src.api_client import core_api
 from aiogram.types import Message

@@ -5,30 +5,31 @@ from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
 from src.ai.conversation_agent.data.strings import MESSAGES
 
-
-
 WEEKEND_KEYWORDS = [
-    # Українська / Російська
     "субот", "неділ", "суббот", "воскрес", "вихідн", "выходн",
-    # Чеська
-    "sobot", "neděl", "víkend",
-    # Англійська
-    "saturday", "sunday", "weekend"
+    "sobot", "neděl", "víkend", "saturday", "sunday", "weekend"
 ]
 
 WEEKEND_NOTICES = {
-    "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницю. У вихідні (субота та неділя) ми зачинені, але наша команда зв'яжеться з Вами в робочий час для узгодження зручного дня!\n\n",
+    "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницу. У вихідні (субота та неділя) ми зачинені, але наша команда зв'яжеться з Вами в робочий час для узгодження зручного дня!\n\n",
     "ru": "⚠️ **Обратите внимание:** наш офис работает с понедельника по пятницу. В выходные (суббота и воскресенье) мы закрыты, но наша команда свяжется с Вами в рабочее время для согласования удобного дня!\n\n",
-    "cs": "⚠️ **Upozornění:** naše kancelář je otevřena od pondělí do pátku. O víkendech (sobota a neděle) máme zavřeno, ale náš tým vás bude kontaktovat v pracovní době a domluví s vámi vhodný termín!\n\n",
-    "en": "⚠️ **Please note:** our office is open Monday through Friday. We are closed on weekends (Saturday and Sunday), but our team will contact you during business hours to schedule a convenient time!\n\n",
+    "cs": "⚠️ **Upozornění:** naše kancelář je otevřena od pondělí do pátku. O víkendech máme zavřeno, ale náš tým vás bude kontaktovat v pracovní době!\n\n",
+    "en": "⚠️ **Please note:** our office is open Monday through Friday. We are closed on weekends, but our team will contact you during business hours!\n\n",
 }
 
-def has_weekend_mention(text: str) -> bool:
-    """Перевіряє, чи містить текст згадку про вихідні дні."""
-    if not text:
-        return False
-    text_lower = text.lower()
-    return any(kw in text_lower for kw in WEEKEND_KEYWORDS)
+PHONE_REPROMPT = {
+    "uk": "Будь ласка, вкажіть **дійсний номер телефону** для зв'язку (наприклад: +420 123 456 789 або 097 123 4567):",
+    "ru": "Пожалуйста, укажите **действительный номер телефона** для связи (например: +420 123 456 789 или 097 123 4567):",
+    "cs": "Uveďte prosím **platné telefonní číslo** (např. +420 123 456 789):",
+    "en": "Please provide a **valid phone number** (e.g. +420 123 456 789):",
+}
+
+EMAIL_REPROMPT = {
+    "uk": "Будь ласка, вкажіть **коректний Email** (наприклад: name@gmail.com) або напишіть **'ні'**, якщо не бажаєте вказувати пошту:",
+    "ru": "Пожалуйста, укажите **корректный Email** (например: name@gmail.com) или напишите **'нет'**, если не хотите указывать почту:",
+    "cs": "Uveďte prosím **platný Email** (např. name@gmail.com) nebo napište **'ne'**, pokud jej nechcete uvádět:",
+    "en": "Please provide a **valid Email address** (e.g. name@gmail.com) or type **'no'** to skip:",
+}
 
 
 def _get_val(obj: Any, key: str, default: Any = None) -> Any:
@@ -49,12 +50,15 @@ def _extract_email(text: str) -> Optional[str]:
 
 
 def _extract_phone(text: str) -> Optional[str]:
-    match = re.search(r'\+?\d[\d\s\-\(\)]{7,}\d', text)
-    return match.group(0) if match else None
+    # Шукаємо послідовність від 7 до 15 цифр
+    digits = re.sub(r'[^\d+]', '', text)
+    if len(digits.replace('+', '')) >= 7:
+        return text
+    return None
 
 
-def extract_service_from_history(history: list) -> str:
-    """Fallback: шукає ключові слова послуг в останніх повідомленнях користувача."""
+def extract_service_from_history(history: list, current_text: str = "") -> str:
+    """Шукає назву послуги у тексті або історії."""
     keywords = {
         "консультаці": "Консультація",
         "переклад": "Судові переклади",
@@ -66,21 +70,27 @@ def extract_service_from_history(history: list) -> str:
         "дублікат": "Дублікати документів",
     }
     
-    if not history:
-        return "Інше / Не вказано"
-
-    user_texts = [
-        m["content"].lower() 
-        for m in reversed(history) 
-        if isinstance(m, dict) and m.get("role") == "user" and m.get("content")
-    ]
-    full_text = " ".join(user_texts)
+    combined_text = current_text.lower()
+    if history:
+        user_texts = [
+            m["content"].lower() 
+            for m in reversed(history) 
+            if isinstance(m, dict) and m.get("role") == "user" and m.get("content")
+        ]
+        combined_text += " " + " ".join(user_texts)
 
     for kw, service_title in keywords.items():
-        if kw in full_text:
+        if kw in combined_text:
             return service_title
             
     return "Інше / Не вказано"
+
+
+def has_weekend_mention(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in WEEKEND_KEYWORDS)
 
 
 async def lead_capture_node(state: AgentState) -> dict:
@@ -91,64 +101,76 @@ async def lead_capture_node(state: AgentState) -> dict:
     step = _get_val(state, "lead_step")
     lang = _get_lang(state)
     msg = MESSAGES.get(lang, MESSAGES["uk"])
+    history = _get_val(state, "conversation_history", [])
     
     updates = {}
 
     if not step or step == "start":
         updates["lead_step"] = "awaiting_name"
         
-        start_response = msg["start"]
-        
-        history = _get_val(state, "conversation_history", [])
-        last_user_text = text
-        if not last_user_text and history:
-            last_user_text = next((m["content"] for m in reversed(history) if m.get("role") == "user" and m.get("content")), "")
+        service = extract_service_from_history(history, current_text=text)
+        updates["current_service"] = service
 
-        if has_weekend_mention(last_user_text):
+        start_response = msg["start"]
+        if has_weekend_mention(text):
             notice = WEEKEND_NOTICES.get(lang, WEEKEND_NOTICES["uk"])
             start_response = notice + start_response
 
         updates["response"] = start_response
         return updates
 
-    if not step or step == "start":
-        updates["lead_step"] = "awaiting_name"
-        updates["response"] = msg["start"]
-        return updates
-
     if step == "awaiting_name":
+        detected_service = extract_service_from_history([], current_text=text)
+        if detected_service != "Інше / Не вказано":
+            updates["current_service"] = detected_service
+            reprompt = {
+                "uk": f"Зрозумів, вас цікавить **{detected_service}**!\n\nА як до вас звертатися? Вкажіть, будь ласка, ваше **Прізвище та Ім'я**:",
+                "ru": f"Понял, вас интересует **{detected_service}**!\n\nКак к вам обращаться? Укажите, пожалуйста, ваше **Имя и Фамилию**:",
+                "cs": f"Rozumím, máte zájem o **{detected_service}**!\n\nJak vás můžeme oslovovat? Uveďte prosím vaše **Jméno a Příjmení**:",
+                "en": f"Understood, you are interested in **{detected_service}**!\n\nMay I have your **Full Name**:",
+            }
+            updates["response"] = reprompt.get(lang, reprompt["uk"])
+            return updates
+
         updates["client_name"] = text
         updates["lead_step"] = "awaiting_phone"
         updates["response"] = msg["ask_phone"].format(name=text)
         return updates
 
     if step == "awaiting_phone":
-        phone = _extract_phone(text) or text
+        phone = _extract_phone(text)
+        if not phone:
+            updates["response"] = PHONE_REPROMPT.get(lang, PHONE_REPROMPT["uk"])
+            return updates
+
         updates["client_phone"] = phone
         updates["lead_step"] = "awaiting_email"
         updates["response"] = msg["ask_email"]
         return updates
 
     if step == "awaiting_email":
-        email = _extract_email(text) or text
-        updates["client_email"] = email
+        email = _extract_email(text)
+        is_skip = text.lower() in ["ні", "нет", "no", "ne", "-", "пропустити", "пропустить", "немає", "нет емейла"]
+
+        if not email and not is_skip:
+            updates["response"] = EMAIL_REPROMPT.get(lang, EMAIL_REPROMPT["uk"])
+            return updates
+
+        final_email = email if email else "Не вказано"
+        updates["client_email"] = final_email
         updates["lead_step"] = "completed"
         updates["response"] = msg["completed"]
 
-        client_name = _get_val(state, "client_name", "")
-        client_phone = _get_val(state, "client_phone", "")
+        client_name = _get_val(state, "client_name", "Не вказано")
+        client_phone = _get_val(state, "client_phone", "Не вказано")
+        service = _get_val(state, "current_service") or extract_service_from_history(history)
         user = _get_val(incoming, "user")
-
-        service = _get_val(state, "current_service")
-        if not service or service in ["None", "null", "Other/Not specified"]:
-            history = _get_val(state, "conversation_history", [])
-            service = extract_service_from_history(history)
 
         await notify_manager_lead_telegram(
             client_name=client_name,
             client_phone=client_phone,
-            client_email=email,
-            requested_service=service,
+            client_email=final_email,
+            service=service,
             user=user,
             lang=lang
         )
@@ -158,8 +180,8 @@ async def lead_capture_node(state: AgentState) -> dict:
             status="ok",
             name=client_name,
             phone=client_phone,
-            email=email,
-            requested_service=service
+            email=final_email,
+            service=service
         )
         return updates
 

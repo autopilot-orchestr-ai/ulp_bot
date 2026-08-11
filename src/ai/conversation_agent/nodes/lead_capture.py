@@ -148,7 +148,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             client_name=client_name,
             client_phone=client_phone,
             client_email=email,
-            service=service,
+            requested_service=service,
             user=user,
             lang=lang
         )

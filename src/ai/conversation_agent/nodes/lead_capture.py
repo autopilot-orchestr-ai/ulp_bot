@@ -6,6 +6,31 @@ from src.logger import log_event
 from src.ai.conversation_agent.data.strings import MESSAGES
 
 
+
+WEEKEND_KEYWORDS = [
+    # Українська / Російська
+    "субот", "неділ", "суббот", "воскрес", "вихідн", "выходн",
+    # Чеська
+    "sobot", "neděl", "víkend",
+    # Англійська
+    "saturday", "sunday", "weekend"
+]
+
+WEEKEND_NOTICES = {
+    "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницю. У вихідні (субота та неділя) ми зачинені, але наша команда зв'яжеться з Вами в робочий час для узгодження зручного дня!\n\n",
+    "ru": "⚠️ **Обратите внимание:** наш офис работает с понедельника по пятницу. В выходные (суббота и воскресенье) мы закрыты, но наша команда свяжется с Вами в рабочее время для согласования удобного дня!\n\n",
+    "cs": "⚠️ **Upozornění:** naše kancelář je otevřena od pondělí do pátku. O víkendech (sobota a neděle) máme zavřeno, ale náš tým vás bude kontaktovat v pracovní době a domluví s vámi vhodný termín!\n\n",
+    "en": "⚠️ **Please note:** our office is open Monday through Friday. We are closed on weekends (Saturday and Sunday), but our team will contact you during business hours to schedule a convenient time!\n\n",
+}
+
+def has_weekend_mention(text: str) -> bool:
+    """Перевіряє, чи містить текст згадку про вихідні дні."""
+    if not text:
+        return False
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in WEEKEND_KEYWORDS)
+
+
 def _get_val(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(key, default)
@@ -28,6 +53,36 @@ def _extract_phone(text: str) -> Optional[str]:
     return match.group(0) if match else None
 
 
+def extract_service_from_history(history: list) -> str:
+    """Fallback: шукає ключові слова послуг в останніх повідомленнях користувача."""
+    keywords = {
+        "консультаці": "Консультація",
+        "переклад": "Судові переклади",
+        "довірен": "Довіреність",
+        "апостиль": "Апостиль",
+        "заяв": "Офіційні заяви",
+        "несудимост": "Довідка про несудимість",
+        "одруженн": "Супровід при одруженні",
+        "дублікат": "Дублікати документів",
+    }
+    
+    if not history:
+        return "Інше / Не вказано"
+
+    user_texts = [
+        m["content"].lower() 
+        for m in reversed(history) 
+        if isinstance(m, dict) and m.get("role") == "user" and m.get("content")
+    ]
+    full_text = " ".join(user_texts)
+
+    for kw, service_title in keywords.items():
+        if kw in full_text:
+            return service_title
+            
+    return "Інше / Не вказано"
+
+
 async def lead_capture_node(state: AgentState) -> dict:
     incoming = _get_val(state, "incoming")
     raw_text = _get_val(incoming, "text", "") or ""
@@ -38,6 +93,23 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["uk"])
     
     updates = {}
+
+    if not step or step == "start":
+        updates["lead_step"] = "awaiting_name"
+        
+        start_response = msg["start"]
+        
+        history = _get_val(state, "conversation_history", [])
+        last_user_text = text
+        if not last_user_text and history:
+            last_user_text = next((m["content"] for m in reversed(history) if m.get("role") == "user" and m.get("content")), "")
+
+        if has_weekend_mention(last_user_text):
+            notice = WEEKEND_NOTICES.get(lang, WEEKEND_NOTICES["uk"])
+            start_response = notice + start_response
+
+        updates["response"] = start_response
+        return updates
 
     if not step or step == "start":
         updates["lead_step"] = "awaiting_name"
@@ -67,10 +139,16 @@ async def lead_capture_node(state: AgentState) -> dict:
         client_phone = _get_val(state, "client_phone", "")
         user = _get_val(incoming, "user")
 
+        service = _get_val(state, "current_service")
+        if not service or service in ["None", "null", "Other/Not specified"]:
+            history = _get_val(state, "conversation_history", [])
+            service = extract_service_from_history(history)
+
         await notify_manager_lead_telegram(
             client_name=client_name,
             client_phone=client_phone,
             client_email=email,
+            service=service,
             user=user,
             lang=lang
         )
@@ -80,7 +158,8 @@ async def lead_capture_node(state: AgentState) -> dict:
             status="ok",
             name=client_name,
             phone=client_phone,
-            email=email
+            email=email,
+            service=service
         )
         return updates
 

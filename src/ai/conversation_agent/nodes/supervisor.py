@@ -1,5 +1,5 @@
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from src.ai.conversation_agent.state import AgentState
@@ -13,6 +13,10 @@ from src.bots.utils.language_detection import should_redetect_language, detect_l
 
 class IntentClassification(BaseModel):
     intent: Literal["info_intent", "lead_intent", "greeting", "unknown", "off_topic"]
+    service_name: str | None = Field(
+        default=None,
+        description="Name of the service mentioned by the user if applicable (e.g. 'Консультація', 'Судові переклади', 'Довіреність', 'Апостиль'). If not mentioned, set to None."
+    )
 
 
 async def classify_intent(state: AgentState) -> dict:
@@ -46,10 +50,14 @@ async def classify_intent(state: AgentState) -> dict:
             HumanMessage(content=state.incoming.text),
         ])
         log_event("intent_classified", status="ok", intent=result.intent)
+
+        existing_service = getattr(state, "current_service", None)
+        detected_service = result.service_name or existing_service
+
         return {
             "intent": result.intent,
             "language": lang,
-            "current_service": None,
+            "current_service": detected_service,
             "retrieved_context": None,
         }
     except Exception as exc:

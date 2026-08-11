@@ -48,7 +48,20 @@ def _route_intent(state: AgentState) -> str:
             return "escalation"
 
 
+def _route_after_lead_capture(state: AgentState) -> str:
+    """Перевіряє, чи поставив користувач запитання під час заповнення форми."""
+    if isinstance(state, dict):
+        route_to_llm = state.get("route_to_llm")
+    else:
+        route_to_llm = getattr(state, "route_to_llm", False)
+
+    if route_to_llm:
+        return "faq"
+    return "end"
+
+
 memory = MemorySaver()
+
 
 def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
@@ -74,9 +87,17 @@ def build_graph() -> StateGraph:
         },
     )
 
+    graph.add_conditional_edges(
+        "lead_capture",
+        _route_after_lead_capture,
+        {
+            "faq": "faq",
+            "end": END,
+        },
+    )
+
     graph.add_edge("faq", END)
     graph.add_edge("info", END)
-    graph.add_edge("lead_capture", END)
     graph.add_edge("escalation", END)
     graph.add_edge("off_topic", END)
 

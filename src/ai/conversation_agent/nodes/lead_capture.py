@@ -5,7 +5,7 @@ from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
 from src.ai.conversation_agent.data.strings import MESSAGES
 
-# Регулярні вирази для пошуку послуг (із захистом від описок, наприклад: "конмультація")
+# 1. Шаблони для пошуку послуг (із захистом від описок)
 SERVICE_PATTERNS = {
     r'кон[сзм][уь]?ль?т': "Консультація",
     r'переклад': "Судові переклади",
@@ -17,11 +17,23 @@ SERVICE_PATTERNS = {
     r'дублікат': "Дублікати документів",
 }
 
-# Слова-маркери намірів (якщо текст містить ці слова, це НЕ ім'я)
+# 2. Ключові слова для виявлення запитань (ігнорують форму і передають керування LLM)
+QUESTION_PATTERNS = [
+    r'\?', r'\bякі\b', r'\bякісь\b', r'\bскільки\b', r'\bціна\b', r'\bвартість\b',
+    r'\bумови\b', r'\bде\b', r'\bяк\b', r'\bщо\b', r'\bкогда\b', r'\bкакие\b',
+    r'\bсколько\b', r'\bцена\b', r'\bстоимость\b', r'\bрасскажите\b', r'\bрозкажіть\b'
+]
+
+# 3. Ключові слова для скасування форми
+CANCEL_KEYWORDS = [
+    "відміна", "скасувати", "стоп", "отмена", "отменить", "не треба", 
+    "не надо", "передумав", "передумал", "закрити", "не хочу"
+]
+
+# 4. Слова-маркери намірів (НЕ є ім'ям)
 INTENT_KEYWORDS = [
     "треба", "хочу", "потрібно", "цікавить", "запишіть", "подзвоніть", 
-    "передзвоніть", "добрий", "привіт", "доброго", "підкажіть", "послуга",
-    "нужна", "нужно", "позвоните", "перезвоните", "нужен"
+    "передзвоніть", "добрий", "привіт", "доброго", "підкажіть", "послуга"
 ]
 
 WEEKEND_KEYWORDS = [
@@ -32,46 +44,22 @@ WEEKEND_KEYWORDS = [
 WEEKEND_NOTICES = {
     "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницю. У вихідні (субота та неділя) ми зачинені, але наша команда зв'яжеться з Вами в робочий час для узгодження зручного дня!\n\n",
     "ru": "⚠️ **Обратите внимание:** наш офис работает с понедельника по пятницу. В выходные (суббота и воскресенье) мы закрыты, но наша команда свяжется с Вами в рабочее время для согласования удобного дня!\n\n",
-    "cs": "⚠️ **Upozornění:** naše kancelář je otevřena od pondělí do pátku. O víkendech máme zavřeno, ale náš tým vás bude kontaktovat v pracovní době!\n\n",
-    "en": "⚠️ **Please note:** our office is open Monday through Friday. We are closed on weekends, but our team will contact you during business hours!\n\n",
 }
 
 PHONE_REPROMPT = {
     "uk": "Будь ласка, вкажіть **дійсний номер телефону** для зв'язку (наприклад: +420 123 456 789 або 097 123 4567):",
-    "ru": "Пожалуйста, укажите **действительный номер телефона** для связи (например: +420 123 456 789 или 097 123 4567):",
-    "cs": "Uveďte prosím **platné telefonní číslo** (např. +420 123 456 789):",
-    "en": "Please provide a **valid phone number** (e.g. +420 123 456 789):",
+    "ru": "Пожалуйста, укажите **действительный номер телефона** для связи (например: +420 123 456 789):",
 }
 
 EMAIL_REPROMPT = {
     "uk": "Будь ласка, вкажіть **коректний Email** (наприклад: name@gmail.com) або напишіть **'ні'**, якщо не бажаєте вказувати пошту:",
     "ru": "Пожалуйста, укажите **корректный Email** (например: name@gmail.com) или напишите **'нет'**, если не хотите указывать почту:",
-    "cs": "Uveďte prosím **platný Email** (např. name@gmail.com) nebo napište **'ne'**, pokud jej nechcete uvádět:",
-    "en": "Please provide a **valid Email address** (e.g. name@gmail.com) or type **'no'** to skip:",
 }
 
 NAME_REPROMPT = {
     "uk": "Будь ласка, вкажіть ваше справжнє **Прізвище та Ім'я** (наприклад: Олександр Воронюк):",
     "ru": "Пожалуйста, укажите ваше настоящее **Имя и Фамилию** (например: Александр Воронюк):",
-    "cs": "Uveďte prosím vaše **Jméno a Příjmení** (např. Jan Novák):",
-    "en": "Please provide your **Full Name** (e.g. John Doe):",
 }
-
-
-QUESTION_KEYWORDS = [
-    "скільки", "сколько", "ціна", "цена", "вартість", "стоимость", "прайс",
-    "які", "какие", "як ", "как ", "де ", "где ", "що ", "что ",
-    "чи ", "ли ", "умови", "условия", "розкажіть", "расскажите"
-]
-
-def is_user_asking_question(text: str) -> bool:
-    """Перевіряє, чи користувач ставить запитання замість введення даних."""
-    if not text:
-        return False
-    if "?" in text:
-        return True
-    text_lower = text.lower()
-    return any(kw in text_lower for kw in QUESTION_KEYWORDS)
 
 
 def _get_val(obj: Any, key: str, default: Any = None) -> Any:
@@ -87,7 +75,6 @@ def _get_lang(state: AgentState) -> str:
 
 
 def detect_service(text: str) -> Optional[str]:
-    """Шукає назву послуги в тексті за шаблонами та описками."""
     if not text:
         return None
     text_lower = text.lower()
@@ -98,45 +85,48 @@ def detect_service(text: str) -> Optional[str]:
 
 
 def extract_service_from_history(history: list, current_text: str = "") -> str:
-    """Шукає послугу у поточному тексті або в історії листування."""
     srv = detect_service(current_text)
     if srv:
         return srv
-        
     if history:
         for m in reversed(history):
             if isinstance(m, dict) and m.get("role") == "user" and m.get("content"):
                 srv = detect_service(m["content"])
                 if srv:
                     return srv
-                    
     return "Інше / Не вказано"
 
 
+def is_user_asking_question(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower()
+    for pattern in QUESTION_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
+
+def is_user_cancelling(text: str) -> bool:
+    if not text:
+        return False
+    text_lower = text.lower().strip()
+    return any(kw in text_lower for kw in CANCEL_KEYWORDS)
+
+
 def is_valid_name(text: str) -> bool:
-    """Перевіряє, чи є введений текст дійсним ім'ям."""
     if not text or len(text.strip()) < 2:
         return False
-    
     text_lower = text.lower().strip()
-    
-    # 1. Якщо містить цифри -> це не ім'я
     if re.search(r'\d', text_lower):
         return False
-        
-    # 2. Якщо в тексті є назва послуги -> це не ім'я
     if detect_service(text_lower):
         return False
-        
-    # 3. Якщо текст містить слова наміру (треба, хочу, подзвоніть) -> це не ім'я
     for kw in INTENT_KEYWORDS:
         if kw in text_lower:
             return False
-            
-    # 4. Перевірка на наявність літер
     if not re.search(r'[a-zA-Zа-яА-ЯіІїЇєЄґҐěščřžýáíéóúůĎŤŇďťň]', text):
         return False
-        
     return True
 
 
@@ -168,24 +158,31 @@ async def lead_capture_node(state: AgentState) -> dict:
     lang = _get_lang(state)
     msg = MESSAGES.get(lang, MESSAGES["uk"])
     history = _get_val(state, "conversation_history", [])
-    
-    if step in ["awaiting_name", "awaiting_phone", "awaiting_email"]:
-        if is_user_asking_question(text):
-            return {
-                "lead_step": None,  # Виходим з режиму збору даних
-                "route_to_llm": True  # Прапор для LangGraph повернутися до основної LLM
-            }
+
+    # --------------------------------------------------------------------------
+    # ПЕРЕВІРКА 1: СКАСУВАННЯ ФОРМИ
+    # --------------------------------------------------------------------------
+    if is_user_cancelling(text):
+        return {
+            "lead_step": None,
+            "route_to_llm": False,
+            "response": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!"
+        }
+
+    # --------------------------------------------------------------------------
+    # ПЕРЕВІРКА 2: КОРИСТУВАЧ СТАВИТЬ ЗАПИТАННЯ (Перенаправлення в LLM/RAG)
+    # --------------------------------------------------------------------------
+    if is_user_asking_question(text):
+        return {
+            "lead_step": None,     # Призупиняємо збір ліда
+            "route_to_llm": True   # Прапор для роутера LangGraph перенаправити до LLM
+        }
 
     updates = {}
 
     # --- КРОК 1: СТАРТ ФОРМИ ---
     if not step or step == "start":
-        # Перевіряємо, чи це випадково не просто запитання про послугу
-        if is_user_asking_question(text):
-            return {"lead_step": None, "route_to_llm": True}
-
         updates["lead_step"] = "awaiting_name"
-        
         service = extract_service_from_history(history, current_text=text)
         updates["current_service"] = service
 
@@ -199,25 +196,21 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     # --- КРОК 2: ВВЕДЕННЯ ІМЕНІ ---
     if step == "awaiting_name":
-        # 1. Перевіряємо, чи не ввів користувач послугу замість імені (наприклад: "конмультація треба")
+        # Перевірка на вибір/зміну послуги
         detected_srv = detect_service(text)
         if detected_srv:
             updates["current_service"] = detected_srv
             reprompt = {
                 "uk": f"Зрозумів, вас цікавить **{detected_srv}**!\n\nА як до вас звертатися? Вкажіть, будь ласка, ваше **Прізвище та Ім'я**:",
                 "ru": f"Понял, вас интересует **{detected_srv}**!\n\nКак к вам обращаться? Укажите, пожалуйста, ваше **Имя и Фамилию**:",
-                "cs": f"Rozumím, máte zájem o **{detected_srv}**!\n\nJak vás můžeme oslovovat? Uveďte prosím vaše **Jméno a Příjmení**:",
-                "en": f"Understood, you are interested in **{detected_srv}**!\n\nMay I have your **Full Name**:",
             }
             updates["response"] = reprompt.get(lang, reprompt["uk"])
             return updates
 
-        # 2. Перевірка чи текст взагалі схожий на ім'я
         if not is_valid_name(text):
             updates["response"] = NAME_REPROMPT.get(lang, NAME_REPROMPT["uk"])
             return updates
 
-        # 3. Якщо ім'я коректне:
         updates["client_name"] = text
         updates["lead_step"] = "awaiting_phone"
         updates["response"] = msg["ask_phone"].format(name=text)
@@ -225,7 +218,6 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     # --- КРОК 3: ВВЕДЕННЯ ТЕЛЕФОНУ ---
     if step == "awaiting_phone":
-        # Оновлюємо послугу, якщо користувач згадав її зараз
         detected_srv = detect_service(text)
         if detected_srv:
             updates["current_service"] = detected_srv
@@ -242,7 +234,6 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     # --- КРОК 4: ВВЕДЕННЯ EMAIL ---
     if step == "awaiting_email":
-        # Оновлюємо послугу, якщо користувач згадав її зараз
         detected_srv = detect_service(text)
         if detected_srv:
             updates["current_service"] = detected_srv
@@ -268,7 +259,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             client_name=client_name,
             client_phone=client_phone,
             client_email=final_email,
-            requested_service=service,
+            service=service,
             user=user,
             lang=lang
         )
@@ -279,7 +270,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             name=client_name,
             phone=client_phone,
             email=final_email,
-            requested_service=service
+            service=service
         )
         return updates
 

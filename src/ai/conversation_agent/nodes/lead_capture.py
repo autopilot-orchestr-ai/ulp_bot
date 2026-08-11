@@ -241,7 +241,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             client_name=client_name,
             client_phone=client_phone,
             client_email=final_email,
-            service=service,
+            requested_service=service,
             user=user,
             lang=lang
         )
@@ -252,7 +252,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             name=client_name,
             phone=client_phone,
             email=final_email,
-            service=service
+            requested_service=service
         )
         return updates
 

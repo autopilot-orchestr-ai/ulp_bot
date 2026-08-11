@@ -58,6 +58,22 @@ NAME_REPROMPT = {
 }
 
 
+QUESTION_KEYWORDS = [
+    "скільки", "сколько", "ціна", "цена", "вартість", "стоимость", "прайс",
+    "які", "какие", "як ", "как ", "де ", "где ", "що ", "что ",
+    "чи ", "ли ", "умови", "условия", "розкажіть", "расскажите"
+]
+
+def is_user_asking_question(text: str) -> bool:
+    """Перевіряє, чи користувач ставить запитання замість введення даних."""
+    if not text:
+        return False
+    if "?" in text:
+        return True
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in QUESTION_KEYWORDS)
+
+
 def _get_val(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(obj, dict):
         return obj.get(key, default)
@@ -153,10 +169,21 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["uk"])
     history = _get_val(state, "conversation_history", [])
     
+    if step in ["awaiting_name", "awaiting_phone", "awaiting_email"]:
+        if is_user_asking_question(text):
+            return {
+                "lead_step": None,  # Виходим з режиму збору даних
+                "route_to_llm": True  # Прапор для LangGraph повернутися до основної LLM
+            }
+
     updates = {}
 
     # --- КРОК 1: СТАРТ ФОРМИ ---
     if not step or step == "start":
+        # Перевіряємо, чи це випадково не просто запитання про послугу
+        if is_user_asking_question(text):
+            return {"lead_step": None, "route_to_llm": True}
+
         updates["lead_step"] = "awaiting_name"
         
         service = extract_service_from_history(history, current_text=text)

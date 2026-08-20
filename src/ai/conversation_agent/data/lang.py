@@ -1,6 +1,9 @@
+from typing import Any
 from src.ai.conversation_agent.data.strings import _UK_CHARS, _CZECH_WORDS, _CZECH_CHARS
+from src.ai.conversation_agent.state import AgentState
 
 _UK_SPECIFIC_WORDS = {"о", "до", "наступний", "прийду", "хочу", "змінити", "дата", "підходить", "було", "якщо"}
+_SUPPORTED_LANGS = {"uk", "ru", "en", "cs"}
 
 
 def detect_lang(text: str) -> str:
@@ -23,3 +26,16 @@ def detect_lang(text: str) -> str:
         return "cs"
         
     return "en"
+
+
+def get_lang(state: AgentState) -> str:
+    """Extracts and returns a supported language code from the current state."""
+    def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default) if obj is not None else default
+
+    incoming = _get_val(state, "incoming")
+    lang = _get_val(incoming, "lang") or _get_val(state, "language", "uk")
+    
+    return lang if lang in _SUPPORTED_LANGS else "uk"

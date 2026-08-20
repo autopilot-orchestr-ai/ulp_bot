@@ -1,7 +1,7 @@
+import sys
 import structlog
 
 SYMBOLS = {"start": "⏳", "ok": "✅", "error": "❌"}
-
 
 _logging_configured = False
 
@@ -17,7 +17,7 @@ def configure_logging() -> None:
         ],
         wrapper_class=structlog.make_filtering_bound_logger(20),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
     )
     _logging_configured = True
 

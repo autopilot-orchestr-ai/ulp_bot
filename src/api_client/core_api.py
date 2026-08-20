@@ -12,7 +12,7 @@ from src.schemas.backend.api import (
 
 class CoreAPIClient:
     def __init__(self):
-        # Отримуємо URL з конфігу (наприклад, http://admin_api:8000)
+        # Get URL from config (example: http://admin_api:8000)
         self.base_url = settings.core_api_url.rstrip("/")
 
     async def get_or_create_conversation(

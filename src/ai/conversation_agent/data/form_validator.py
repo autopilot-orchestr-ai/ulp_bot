@@ -5,11 +5,13 @@ from src.ai.conversation_agent.data.strings import (
     QUESTION_PATTERNS, 
     CANCEL_KEYWORDS, 
     INTENT_KEYWORDS, 
-    WEEKEND_KEYWORDS
+    WEEKEND_KEYWORDS,
+    PROFANITY_PATTERNS,
+    HUMAN_HANDOFF_PATTERNS
 )
 
 class FormValidator:
-    """Utility class for validating and extracting data from user input during the lead capture process."""
+    """Production-grade validator for lead collection form steps."""
 
     @staticmethod
     def get_val(obj: Any, key: str, default: Any = None) -> Any:
@@ -41,27 +43,36 @@ class FormValidator:
         return "Інше / Не вказано"
 
     @staticmethod
-    def is_user_asking_question(text: str) -> bool:
-        if not text:
-            return False
-        text_lower = text.lower()
-        
-        # Hard check for question marks anywhere
-        if '?' in text_lower:
-            return True
-            
-        # Check against multi-lingual question keywords
-        for pattern in QUESTION_PATTERNS:
-            if re.search(pattern, text_lower):
-                return True
-        return False
-
-    @staticmethod
-    def is_user_cancelling(text: str) -> bool:
+    def is_profanity_or_hostile(text: str) -> bool:
         if not text:
             return False
         text_lower = text.lower().strip()
+        return any(re.search(pat, text_lower) for pat in PROFANITY_PATTERNS)
+
+    @staticmethod
+    def is_human_handoff_requested(text: str) -> bool:
+        if not text:
+            return False
+        text_lower = text.lower().strip()
+        return any(re.search(pat, text_lower) for pat in HUMAN_HANDOFF_PATTERNS)
+
+    @classmethod
+    def is_user_cancelling(cls, text: str) -> bool:
+        if not text:
+            return False
+        text_lower = text.lower().strip()
+        if cls.is_profanity_or_hostile(text_lower):
+            return True
         return any(kw in text_lower for kw in CANCEL_KEYWORDS)
+
+    @classmethod
+    def is_user_asking_question(cls, text: str) -> bool:
+        if not text:
+            return False
+        text_lower = text.lower()
+        if '?' in text_lower:
+            return True
+        return any(re.search(pat, text_lower) for pat in QUESTION_PATTERNS)
 
     @classmethod
     def is_valid_name(cls, text: str) -> bool:
@@ -70,65 +81,75 @@ class FormValidator:
             
         text = text.strip()
         text_lower = text.lower()
-        
-        # Exception 1: Length constraints
-        if not (2 <= len(text) <= 50):
+
+        if cls.is_profanity_or_hostile(text_lower) or cls.is_human_handoff_requested(text_lower):
+            return False
+
+        if not (2 <= len(text) <= 50) or len(text.split()) > 4:
             return False
             
-        # Exception 2: Word count (Most names are 1-4 words. 5+ is a sentence)
-        if len(text.split()) > 4:
+        if '@' in text or re.search(r'http[s]?://', text) or re.search(r'\d', text):
             return False
             
-        # Exception 3: Contains URLs or emails
-        if '@' in text or re.search(r'http[s]?://', text):
-            return False
-            
-        # Exception 4: Contains digits
-        if re.search(r'\d', text):
-            return False
-            
-        # Exception 5: Matches known services
         if cls.detect_service(text_lower):
             return False
             
-        # Exception 6: Exact match for intent keywords (using word boundaries to prevent false positives)
         for kw in INTENT_KEYWORDS:
             if re.search(rf'\b{re.escape(kw)}\b', text_lower):
                 return False
                 
-        # Exception 7: Strict character validation (Letters, spaces, hyphens, apostrophes across supported languages)
         if not re.fullmatch(r'[A-Za-zА-Яа-яІіЇїЄєҐґĚŠČŘŽÝÁÍÉÓÚŮĎŤŇěščřžýáíéóúůďťň\s\-\']+', text):
             return False
             
+        # Gibberish check: Reject 6+ consecutive consonants
+        if re.search(r'[bcdfghjklmnpqrstvwxyzбвгґджзклмнпрстфхцчшщ]{6,}', text_lower):
+            return False
+
         return True
 
-    @staticmethod
-    def extract_email(text: str) -> Optional[str]:
-        # Strict boundary extraction for valid email structures
-        match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,10}\b', text)
-        return match.group(0) if match else None
+    @classmethod
+    def extract_phone(cls, text: str) -> Optional[str]:
+        if not text or cls.is_profanity_or_hostile(text):
+            return None
 
-    @staticmethod
-    def extract_phone(text: str) -> Optional[str]:
-        # Exception: Prevent extracting phones from long sentences full of numbers
         digits_only = re.sub(r'[^\d]', '', text)
         digit_count = len(digits_only)
-        
-        # Standard phone length check
+
         if 7 <= digit_count <= 15:
-            # If the user typed a long sentence, and digits make up less than 30% of it, it's not a phone entry
             if len(text) > 30 and (digit_count / len(text)) < 0.3:
                 return None
-                
-            # Re-extract with plus sign if valid
-            full_match = re.sub(r'[^\d+]', '', text)
-            return full_match
             
+            # Reject dummy repeating digits
+            if digits_only in ["12345678", "123456789", "0000000000"] or len(set(digits_only)) <= 2:
+                return None
+
+            return re.sub(r'[^\d+]', '', text)
+
         return None
+
+    @classmethod
+    def extract_email(cls, text: str) -> Optional[str]:
+        if not text or cls.is_profanity_or_hostile(text):
+            return None
+
+        match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,10}\b', text)
+        if not match:
+            return None
+
+        email = match.group(0).lower()
+        prefix, domain = email.split('@', 1)
+
+        # Gibberish prefix check
+        if re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', prefix):
+            return None
+
+        if '.' not in domain or len(domain.split('.')[-1]) < 2:
+            return None
+
+        return email
 
     @staticmethod
     def has_weekend_mention(text: str) -> bool:
         if not text:
             return False
-        text_lower = text.lower()
-        return any(kw in text_lower for kw in WEEKEND_KEYWORDS)
+        return any(kw in text.lower() for kw in WEEKEND_KEYWORDS)

@@ -24,6 +24,14 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
+    # Check 0: User demands urgent human contact / callback
+    if FormValidator.is_human_handoff_requested(text):
+        return {
+            "lead_step": None,
+            "route_to_llm": False,
+            "response": "Зрозумів! Я передав ваше повідомлення менеджеру. Він зв'яжеться з вами в найближчий час."
+        }
+
     # Check 1: User explicitly cancels the flow
     if FormValidator.is_user_cancelling(text):
         return {

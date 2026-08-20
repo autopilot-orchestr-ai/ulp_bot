@@ -95,11 +95,33 @@ INTENT_KEYWORDS = [
     # English
     "hello", "hi", "hey", "need", "want", "please", "book", "consultation",
     # Ukrainian / Russian
-    "треба", "хочу", "потрібно", "цікавить", "запишіть", "подзвоніть", 
+    "треба", "хочу", "потрібно", "цікавит", "запишіть", "подзвоніть", 
     "передзвоніть", "добрий", "привіт", "доброго", "підкажіть", "послуга",
     # Czech
     "chci", "potřebuji", "prosím", "ahoj", "dobrý"
 ]
+
+# --- Profanity & Hostility Patterns ---
+PROFANITY_PATTERNS = [
+    r'\bблят[ьа]?\b', r'\bсука\b', r'\bнах[ууі]й\b', r'\bхуй\b', r'\bпизд[аеыоуя]?\b',
+    r'\bебат[ьъ]\b', r'\bєбат[ьi]\b', r'\bдолбо[еє]б\b', r'\bтуп[оыій]+[ая]?\b',
+    r'\bfuck\b', r'\bshit\b', r'\basshole\b', r'\bbitch\b'
+]
+
+# --- Human Handoff / Urgency Patterns ---
+HUMAN_HANDOFF_PATTERNS = [
+    r'\bподзвон[иі]ть?\b', r'\bнапиш[iі]ть?\b', r'\bзв\'яж[iі]ться\b',
+    r'\bпоклич[iі]ть?\b', r'\bоператор\b', r'\bменеджер\b', r'\bлюдина\b',
+    r'\bпрямо зараз\b', r'\bтерм[іi]ново\b', r'\bсрочно\b'
+]
+
+# --- System Responses ---
+HUMAN_HANDOFF_RESPONSE = {
+    "uk": "Зрозумів! Я передав ваше повідомлення менеджеру. Він зв'яжеться з вами в найближчий час.",
+    "cs": "Rozumím! Předal jsem vaši zprávu manažerovi. Brzy se s vámi spojí.",
+    "en": "Understood! I have forwarded your request to our manager. They will contact you shortly.",
+    "ru": "Понял! Я передал ваше сообщение менеджеру. Он свяжется с вами в ближайшее время."
+}
 
 CANCEL_KEYWORDS = [
     "не зможу", "не приду", "скасувати", "відмінити", "відміна", "стоп",

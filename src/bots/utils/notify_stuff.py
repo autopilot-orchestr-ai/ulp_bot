@@ -6,7 +6,7 @@ async def notify_manager_lead_telegram(
     client_name: str,
     client_phone: str,
     client_email: str,
-    requested_service: str = "Other/Not specified",
+    service: str = "Other/Not specified",
     user: User | None = None,
     lang: str = "uk",
 ) -> None:
@@ -34,7 +34,7 @@ async def notify_manager_lead_telegram(
             f"📛 <b>Ім'я / ПІБ:</b> {client_name}\n"
             f"📞 <b>Телефон:</b> <code>{client_phone}</code>\n"
             f"✉️ <b>Email:</b> {client_email}\n"
-            f"🧾 <b>Послуга:</b> {requested_service}\n"
+            f"🧾 <b>Послуга:</b> {service}\n"
             f"🌐 <b>Мова:</b> {lang.upper()}\n\n"
             f"👉 <i>Будь ласка, зв'яжіться з клієнтом для узгодження детальностей.</i>"
         ),

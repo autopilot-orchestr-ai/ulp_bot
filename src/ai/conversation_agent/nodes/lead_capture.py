@@ -30,7 +30,7 @@ async def lead_capture_node(state: AgentState) -> dict:
     
     if step == "completed" or is_asking_for_services:
         # Clear out the lead step and current service to start fresh
-        service = FormValidator.extract_service_from_health_or_history(history, current_text=text) # or whatever your extraction method is
+        service = FormValidator.extract_service_from_history(history, current_text=text) # or whatever your extraction method is
         
         if is_asking_for_services or not service:
             from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE

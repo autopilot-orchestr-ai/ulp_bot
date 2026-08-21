@@ -4,7 +4,7 @@ from src.config import settings
 from src.ai.conversation_agent.state import AgentState
 from src.ai.knowledge.llm import get_llm
 from src.ai.conversation_agent.prompts.info import INFO_SYSTEM_PROMPT
-from src.ai.conversation_agent.data.lang import detect_lang
+from src.ai.conversation_agent.agent_rules.lang import detect_lang
 from src.logger import log_event
 
 async def info_agent(state: AgentState) -> dict:

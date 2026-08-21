@@ -5,7 +5,7 @@ from src.logger import log_event
 from src.ai.conversation_agent.prompts.escalation import HANDOFF_MESSAGES
 from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.api_client.core_api import core_api
-from src.ai.conversation_agent.data.lang import detect_lang 
+from src.ai.conversation_agent.agent_rules.lang import detect_lang 
 
 
 async def get_or_create_conversation_id() -> uuid.UUID:

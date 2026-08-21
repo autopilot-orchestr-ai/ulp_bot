@@ -1,15 +1,15 @@
 from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
-from src.ai.conversation_agent.data.strings import (
+from src.ai.conversation_agent.agent_rules.strings import (
     MESSAGES, 
     WEEKEND_NOTICES, 
     PHONE_REPROMPT, 
     EMAIL_REPROMPT, 
     NAME_REPROMPT
 )
-from src.ai.conversation_agent.data.lang import get_lang
-from src.ai.conversation_agent.data.form_validator import FormValidator
+from src.ai.conversation_agent.agent_rules.lang import get_lang
+from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 
 
 async def lead_capture_node(state: AgentState) -> dict:

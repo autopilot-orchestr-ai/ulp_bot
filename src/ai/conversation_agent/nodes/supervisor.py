@@ -6,7 +6,7 @@ from src.ai.conversation_agent.state import AgentState
 from src.config import settings
 from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
-from src.ai.conversation_agent.data.lang import detect_lang
+from src.ai.conversation_agent.agent_rules.lang import detect_lang
 from src.ai.conversation_agent.prompts.superviser import SYSTEM_PROMPT
 from src.bots.utils.language_detection import should_redetect_language, detect_lang
 

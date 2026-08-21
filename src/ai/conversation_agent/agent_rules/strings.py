@@ -185,8 +185,15 @@ EMAIL_REPROMPT = {
 }
 
 NAME_REPROMPT = {
-    "en": "Please provide your real **First and Last Name** (e.g.: Alexander Voroniuk):",
-    "cs": "Uveďte prosím své skutečné **Jméno a Příjmení** (např.: Alexandr Voroniuk):",
-    "uk": "Будь ласка, вкажіть ваше справжнє **Прізвище та Ім'я** (наприклад: Олександр Воронюк):",
-    "ru": "Пожалуйста, укажите ваше настоящее **Имя и Фамилию** (например: Александр Воронюк):",
+    "en": "Please provide your real **First and Last Name** (e.g.: Peter Parker):",
+    "cs": "Uveďte prosím své skutečné **Jméno a Příjmení** (např.: Honza Novakov):",
+    "uk": "Будь ласка, вкажіть ваше справжнє **Прізвище та Ім'я** (наприклад: Іван Іваненко):",
+    "ru": "Пожалуйста, укажите ваше настоящее **Имя и Фамилию** (например: Петр Петров):",
+}
+
+SERVICES_LIST_RESPONSE = {
+    "uk": "Ось перелік послуг, які ми надаємо:\n\n1. **Юридичні консультації**\n2. **Візові консультації**\n3. **Судові переклади**\n4. **Апостиль**\n5. **Довіреності**\n6. **Офіційні заяви**\n7. **Довідка про несудимість з України**\n8. **Супровід при одруженні**\n9. **Дублікати документів з України**\n\nЯка саме послуга вас цікавить?",
+    "ru": "Вот перечень услуг, которые мы предоставляем:\n\n1. **Юридические консультации**\n2. **Визовые консультации**\n3. **Судебные переводы**\n4. **Апостиль**\n5. **Доверенности**\n6. **Официальные заявления**\n7. **Справка о несудимости из Украины**\n8. **Сопровождение при бракосочетании**\n9. **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
+    "cs": "Zde je seznam služeb, které poskytujeme:\n\n1. **Právní poradenství**\n2. **Vízové poradenství**\n3. **Soudní překlady**\n4. **Apostila**\n5. **Plné moci**\n6. **Úřední prohlášení**\n7. **Výpis z rejstříku trestů z Ukrajiny**\n8. **Asistence při sňatku**\n9. **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
+    "en": "Here is the list of services we provide:\n\n1. **Legal Consultations**\n2. **Visa Consultations**\n3. **Sworn Translations**\n4. **Apostille**\n5. **Powers of Attorney**\n6. **Official Statements**\n7. **Police Clearance Certificate from Ukraine**\n8. **Marriage Support**\n9. **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
 }

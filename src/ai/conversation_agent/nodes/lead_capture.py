@@ -6,7 +6,8 @@ from src.ai.conversation_agent.agent_rules.strings import (
     WEEKEND_NOTICES, 
     PHONE_REPROMPT, 
     EMAIL_REPROMPT, 
-    NAME_REPROMPT
+    NAME_REPROMPT,
+    SERVICES_LIST_RESPONSE
 )
 from src.ai.conversation_agent.agent_rules.lang import get_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
@@ -24,13 +25,11 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
-    # If the user is asking for services/catalog or a new appointment, reset the completed/stuck state!
     text_lower = text.lower()
     is_asking_for_services = any(kw in text_lower for kw in ["послуг", "услуг", "services", "каталог", "список", "що робіт", "прайс", "новий запис"])
     
     if step == "completed" or is_asking_for_services:
-        # Clear out the lead step and current service to start fresh
-        service = FormValidator.extract_service_from_history(history, current_text=text) # or whatever your extraction method is
+        service = FormValidator.extract_service_from_history(history, current_text=text)
         
         if is_asking_for_services or not service:
             from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
@@ -77,15 +76,13 @@ async def lead_capture_node(state: AgentState) -> dict:
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no service was detected in current or history, show the catalog and reset everything
         if not service:
             from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
             return {
-                "lead_step": None, # Reset to stop the loop
+                "lead_step": None,
                 "response": SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
             }
 
-        # Otherwise, proceed with the detected service
         updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service
 

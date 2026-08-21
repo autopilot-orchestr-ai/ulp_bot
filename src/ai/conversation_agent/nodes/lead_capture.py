@@ -24,6 +24,26 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
+    # If the user is asking for services/catalog or a new appointment, reset the completed/stuck state!
+    text_lower = text.lower()
+    is_asking_for_services = any(kw in text_lower for kw in ["послуг", "услуг", "services", "каталог", "список", "що робіт", "прайс", "новий запис"])
+    
+    if step == "completed" or is_asking_for_services:
+        # Clear out the lead step and current service to start fresh
+        service = FormValidator.extract_service_from_health_or_history(history, current_text=text) # or whatever your extraction method is
+        
+        if is_asking_for_services or not service:
+            from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
+            return {
+                "lead_step": None,
+                "current_service": None,
+                "client_name": None,
+                "client_phone": None,
+                "client_email": None,
+                "route_to_llm": False,
+                "response": SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
+            }
+
     # Check for profanity first
     if FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
@@ -53,17 +73,19 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     updates = {}
 
-    # Step 1: Initialize form or catch general requests without a specific service
+    # Step 1: Initialize form
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If the user asks for services generally without picking a specific one, show the catalog!
+        # If no service was detected in current or history, show the catalog and reset everything
         if not service:
             from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
-            updates["lead_step"] = None  # Reset step so it doesn't loop into name collection
-            updates["response"] = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
-            return updates
+            return {
+                "lead_step": None, # Reset to stop the loop
+                "response": SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
+            }
 
+        # Otherwise, proceed with the detected service
         updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service
 

@@ -30,7 +30,7 @@ class FormValidator:
         return None
 
     @classmethod
-    def extract_service_from_history(cls, history: List[Dict], current_text: str = "") -> str:
+    def extract_service_from_history(cls, history: List[Dict], current_text: str = "") -> Optional[str]: # Changed return type
         srv = cls.detect_service(current_text)
         if srv:
             return srv
@@ -40,7 +40,7 @@ class FormValidator:
                     srv = cls.detect_service(m["content"])
                     if srv:
                         return srv
-        return "Інше / Не вказано"
+        return None # Return None when nothing is found
 
     @staticmethod
     def is_profanity_or_hostile(text: str) -> bool:

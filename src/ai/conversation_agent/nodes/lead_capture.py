@@ -57,8 +57,15 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     # Step 1: Initialize form
     if not step or step == "start":
-        updates["lead_step"] = "awaiting_name"
         service = FormValidator.extract_service_from_history(history, current_text=text)
+        
+        # If no specific service was detected, route them to view the services catalog first
+        if not service:
+            from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
+            updates["response"] = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
+            return updates
+
+        updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service
 
         start_response = msg["start"]

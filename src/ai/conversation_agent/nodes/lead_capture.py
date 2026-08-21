@@ -24,12 +24,18 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
-    # Check 0: User demands urgent human contact / callback
-    if FormValidator.is_human_handoff_requested(text):
+    # Check 0: Profanity or Hostility Warning Handler
+    if FormValidator.is_profanity_or_hostile(text):
+        profanity_warnings = {
+            "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Чим можу допомогти вам із нашими послугами?",
+            "cs": "Prosím, udržujte v chatu slušnou komunikaci. Jak vám mohu pomoci s našimi službami?",
+            "en": "Please keep our communication respectful. How can I help you with our services?",
+            "ru": "Пожалуйста, соблюдайте корректное общение в чате. Чем могу помочь вам с нашими услугами?"
+        }
         return {
             "lead_step": None,
             "route_to_llm": False,
-            "response": "Зрозумів! Я передав ваше повідомлення менеджеру. Він зв'яжеться з вами в найближчий час."
+            "response": profanity_warnings.get(lang, profanity_warnings["en"])
         }
 
     # Check 1: User explicitly cancels the flow

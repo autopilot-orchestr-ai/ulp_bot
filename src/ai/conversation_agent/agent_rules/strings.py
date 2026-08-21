@@ -68,9 +68,9 @@ INTENT_KEYWORDS = [
 
 # --- Profanity & Hostility Patterns ---
 PROFANITY_PATTERNS = [
-    r'\bблят[ьа]?\b', r'\bсука\b', r'\bнах[ууі]й\b', r'\bхуй\b', r'\bпизд[аеыоуя]?\b',
-    r'\bебат[ьъ]\b', r'\bєбат[ьi]\b', r'\bдолбо[еє]б\b', r'\bтуп[оыій]+[ая]?\b',
-    r'\bfuck\b', r'\bshit\b', r'\basshole\b', r'\bbitch\b'
+    r'(?i)\bблят[ьа]?\b', r'(?i)\bсука\b', r'(?i)\bнах[ууі]й\b', r'(?i)\bх[уу]й\b', r'(?i)\bп[иі]зд[аеыоуя]?\b',
+    r'(?i)\bебат[ьъ]\b', r'(?i)\bєбат[ьi]\b', r'(?i)\bдолбо[еє]б\b', r'(?i)\bтуп[аоыій]+[ая]?\b',
+    r'(?i)\bfuck\b', r'(?i)\bshit\b', r'(?i)\basshole\b', r'(?i)\bbitch\b'
 ]
 
 # --- Human Handoff / Urgency Patterns ---

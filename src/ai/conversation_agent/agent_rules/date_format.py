@@ -1,5 +1,5 @@
 from datetime import datetime
-from src.ai.conversation_agent.data.strings import _PRAGUE_TZ, _DAYS, _MONTHS
+from src.ai.conversation_agent.agent_rules.strings import _PRAGUE_TZ, _DAYS, _MONTHS
 
 def fmt_prague(dt: datetime, lang: str = "cs") -> str:
     p = dt.astimezone(_PRAGUE_TZ)

@@ -1,6 +1,6 @@
 import re
 from typing import Any, Optional, List, Dict
-from src.ai.conversation_agent.data.strings import (
+from src.ai.conversation_agent.agent_rules.strings import (
     SERVICE_PATTERNS, 
     QUESTION_PATTERNS, 
     CANCEL_KEYWORDS, 

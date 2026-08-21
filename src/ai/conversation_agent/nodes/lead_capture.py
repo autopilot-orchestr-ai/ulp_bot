@@ -24,7 +24,7 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
-    # Check 0: Profanity or Hostility Warning Handler
+    # Check for profanity first
     if FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Чим можу допомогти вам із нашими послугами?",
@@ -38,7 +38,6 @@ async def lead_capture_node(state: AgentState) -> dict:
             "response": profanity_warnings.get(lang, profanity_warnings["en"])
         }
 
-    # Check 1: User explicitly cancels the flow
     if FormValidator.is_user_cancelling(text):
         return {
             "lead_step": None,
@@ -46,7 +45,6 @@ async def lead_capture_node(state: AgentState) -> dict:
             "response": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!"
         }
 
-    # Check 2: User asks a question (Suspend capture and route to RAG/LLM)
     if FormValidator.is_user_asking_question(text):
         return {
             "lead_step": None,     
@@ -55,13 +53,14 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     updates = {}
 
-    # Step 1: Initialize form
+    # Step 1: Initialize form or catch general requests without a specific service
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no specific service was detected, route them to view the services catalog first
+        # If the user asks for services generally without picking a specific one, show the catalog!
         if not service:
             from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
+            updates["lead_step"] = None  # Reset step so it doesn't loop into name collection
             updates["response"] = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
             return updates
 

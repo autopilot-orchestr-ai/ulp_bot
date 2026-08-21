@@ -24,19 +24,21 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
-    # 1. BREAK THE LOOP: If the form was already finished, reset everything 
-    # so the bot can answer normally or start a brand new request.
+    updates = {}
+
+    # 1. BREAK THE LOOP: If the form was already completed, wipe the state.
+    # We do NOT return here; we let the bot process their new message as a fresh start.
     if step == "completed":
-        return {
+        step = None
+        updates.update({
             "lead_step": None,
             "current_service": None,
             "client_name": None,
             "client_phone": None,
             "client_email": None,
-            "route_to_llm": True
-        }
+        })
 
-    # 2. Profanity Check (Now catches case-insensitive and Ukrainian chars)
+    # 2. Profanity Check (Regex updated at the bottom of the file)
     if FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Введіть дані коректно або задайте ваше питання.",
@@ -44,14 +46,27 @@ async def lead_capture_node(state: AgentState) -> dict:
             "en": "Please keep our communication respectful. Enter valid details or ask your question.",
             "ru": "Пожалуйста, соблюдайте корректное общение в чате. Введите данные корректно или задайте ваш вопрос."
         }
-        return {
+        updates.update({
             "route_to_llm": False,
             "response": profanity_warnings.get(lang, profanity_warnings["en"])
-        }
+        })
+        return updates
 
-    # 3. Cancel Check
+    # 3. Question Trapping: Completely cancel booking and answer the question via LLM
+    if FormValidator.is_user_asking_question(text):
+        updates.update({
+            "lead_step": None,
+            "current_service": None,
+            "client_name": None,
+            "client_phone": None,
+            "client_email": None,
+            "route_to_llm": True   
+        })
+        return updates
+
+    # 4. Cancel Check
     if FormValidator.is_user_cancelling(text):
-        return {
+        updates.update({
             "lead_step": None,
             "current_service": None,
             "client_name": None,
@@ -59,28 +74,21 @@ async def lead_capture_node(state: AgentState) -> dict:
             "client_email": None,
             "route_to_llm": False,
             "response": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!"
-        }
-
-    # 4. Route generic questions to LLM (Clear state so it reads your YAML)
-    if FormValidator.is_user_asking_question(text):
-        return {
-            "lead_step": None, 
-            "route_to_llm": True   
-        }
-
-    updates = {}
+        })
+        return updates
 
     # Step 1: Initialize form
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no specific service is mentioned yet, hand control BACK to the LLM 
-        # and ensure the lead_step is None so it doesn't get stuck!
+        # If no specific service is mentioned yet, DO NOT capture a "None" lead.
+        # Wipe state and route to LLM so it can read YAML and list the actual services.
         if not service:
-            return {
+            updates.update({
                 "lead_step": None,
                 "route_to_llm": True
-            }
+            })
+            return updates
 
         updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service

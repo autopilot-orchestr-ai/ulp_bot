@@ -12,7 +12,6 @@ from src.ai.conversation_agent.agent_rules.strings import (
 from src.ai.conversation_agent.agent_rules.lang import get_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 
-
 async def lead_capture_node(state: AgentState) -> dict:
     log_event("lead_capture_start", status="start", step=FormValidator.get_val(state, "lead_step"))
 
@@ -25,25 +24,7 @@ async def lead_capture_node(state: AgentState) -> dict:
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
-    text_lower = text.lower()
-    is_asking_for_services = any(kw in text_lower for kw in ["послуг", "услуг", "services", "каталог", "список", "що робіт", "прайс", "новий запис"])
-    
-    if step == "completed" or is_asking_for_services:
-        service = FormValidator.extract_service_from_history(history, current_text=text)
-        
-        if is_asking_for_services or not service:
-            from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
-            return {
-                "lead_step": None,
-                "current_service": None,
-                "client_name": None,
-                "client_phone": None,
-                "client_email": None,
-                "route_to_llm": False,
-                "response": SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
-            }
-
-    # Check for profanity first
+    # 1. Check for profanity first
     if FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Чим можу допомогти вам із нашими послугами?",
@@ -52,21 +33,25 @@ async def lead_capture_node(state: AgentState) -> dict:
             "ru": "Пожалуйста, соблюдайте корректное общение в чате. Чем могу помочь вам с нашими услугами?"
         }
         return {
-            "lead_step": None,
             "route_to_llm": False,
             "response": profanity_warnings.get(lang, profanity_warnings["en"])
         }
 
+    # 2. Check if user is cancelling the booking
     if FormValidator.is_user_cancelling(text):
         return {
             "lead_step": None,
+            "current_service": None,
+            "client_name": None,
+            "client_phone": None,
+            "client_email": None,
             "route_to_llm": False,
             "response": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!"
         }
 
+    # 3. Always route generic questions to LLM so it can read your YAML FAQ!
     if FormValidator.is_user_asking_question(text):
         return {
-            "lead_step": None,     
             "route_to_llm": True   
         }
 
@@ -76,11 +61,11 @@ async def lead_capture_node(state: AgentState) -> dict:
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
+        # If no specific service is detected yet, hand control back to the LLM!
+        # This allows the AI to use your YAML data instead of a hardcoded dump.
         if not service:
-            from src.ai.conversation_agent.agent_rules.strings import SERVICES_LIST_RESPONSE
             return {
-                "lead_step": None,
-                "response": SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
+                "route_to_llm": True
             }
 
         updates["lead_step"] = "awaiting_name"

@@ -62,7 +62,13 @@ async def lead_capture_node(state: AgentState) -> dict:
         return updates
 
     # 4. Cancel Check
-    if FormValidator.is_user_cancelling(text):
+    if await FormValidator.is_user_cancelling(text):
+        cancel_msgs = {
+            "uk": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!",
+            "cs": "Rozumím, zrušil jsem záznam. Pokud budete mít dotazy, ptejte se!",
+            "en": "Got it, I've canceled the booking. Let me know if you have any questions!",
+            "ru": "Понял, отменил запись. Если возникнут вопросы — задавайте!"
+        }
         updates.update({
             "lead_step": None,
             "current_service": None,
@@ -70,7 +76,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             "client_phone": None,
             "client_email": None,
             "route_to_llm": False,
-            "response": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!"
+            "response": cancel_msgs.get(lang, cancel_msgs["uk"])
         })
         return updates
 
@@ -127,7 +133,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         if detected_srv:
             updates["current_service"] = detected_srv
 
-        phone = FormValidator.extract_phone(text)
+        phone = await FormValidator.extract_phone(text)
         if not phone:
             updates["response"] = PHONE_REPROMPT.get(lang, PHONE_REPROMPT["en"])
             return updates
@@ -143,7 +149,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         if detected_srv:
             updates["current_service"] = detected_srv
 
-        email = FormValidator.extract_email(text)
+        email = await FormValidator.extract_email(text)
         is_skip = text.lower() in ["ні", "нет", "no", "ne", "-", "пропустити", "пропустить", "немає", "нет емейла"]
 
         if not email and not is_skip:

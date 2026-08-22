@@ -16,7 +16,8 @@ async def get_or_create_conversation_id() -> uuid.UUID:
 async def escalate(state: AgentState) -> dict:
     conversation_id = await get_or_create_conversation_id()
 
-    await core_api.store_unanswered_question(conversation_id, state)
+    # FIX: Pass state.incoming.text instead of state
+    await core_api.store_unanswered_question(conversation_id, state.incoming.text)
 
     staff_notified = bool(settings.staff_telegram_chat_id)
     try:

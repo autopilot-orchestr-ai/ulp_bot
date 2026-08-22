@@ -39,7 +39,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         })
 
     # 2. Profanity Check (Regex updated at the bottom of the file)
-    if FormValidator.is_profanity_or_hostile(text):
+    if await FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Введіть дані коректно або задайте ваше питання.",
             "cs": "Prosím, udržujte v chatu slušnou komunikaci. Zadejte správné údaje nebo položte dotaz.",
@@ -53,7 +53,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         return updates
 
     # 3. Question Trapping: Pause booking and answer the question via LLM
-    if FormValidator.is_user_asking_question(text):
+    if await FormValidator.is_user_asking_question(text):
         updates.update({
             # WE REMOVED the lines that wiped lead_step, client_name, etc.
             # By keeping them intact, the bot remembers where it paused.
@@ -112,7 +112,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             updates["response"] = reprompt.get(lang, reprompt["en"])
             return updates
 
-        if not FormValidator.is_valid_name(text):
+        if not await FormValidator.is_valid_name(text):
             updates["response"] = NAME_REPROMPT.get(lang, NAME_REPROMPT["en"])
             return updates
 

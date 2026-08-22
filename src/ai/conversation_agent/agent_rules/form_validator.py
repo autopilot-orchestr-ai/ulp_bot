@@ -13,6 +13,7 @@ from src.ai.conversation_agent.agent_rules.strings import (
 # IMPORT YOUR LLM SETUP HERE:
 from src.ai.knowledge.llm import get_llm
 from langchain_core.messages import HumanMessage
+from src.config import settings
 
 class FormValidator:
     """Production-grade validator for lead collection form steps."""
@@ -46,12 +47,18 @@ class FormValidator:
                         return srv
         return None # Return None when nothing is found
 
-    @staticmethod
-    def is_profanity_or_hostile(text: str) -> bool:
-        if not text:
+    @classmethod
+    async def is_profanity_or_hostile(cls, text: str) -> bool:
+        prompt = f"""Does this text contain extreme hostility or profanity in Ukrainian, Russian, English, or Czech (e.g., "Ty pičo")?
+Text: "{text}"
+Reply ONLY with "TRUE" if it contains profanity, or "FALSE" if it is clean."""
+
+        try:
+            llm = get_llm(model=settings.llm_model, temperature=0)
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            return "TRUE" in response.content.upper()
+        except Exception:
             return False
-        text_lower = text.lower().strip()
-        return any(re.search(pat, text_lower) for pat in PROFANITY_PATTERNS)
 
     @staticmethod
     def is_human_handoff_requested(text: str) -> bool:
@@ -70,71 +77,39 @@ class FormValidator:
         return any(kw in text_lower for kw in CANCEL_KEYWORDS)
 
     @classmethod
-    def is_user_asking_question(cls, text: str) -> bool:
-        if not text:
+    async def is_user_asking_question(cls, text: str) -> bool:
+        prompt = f"""Is the user asking a question or requesting help instead of answering a form prompt?
+Text: "{text}"
+Reply ONLY with "TRUE" if it's a question, or "FALSE" if it's a statement/answer."""
+
+        try:
+            llm = get_llm(model=settings.llm_model, temperature=0)
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            return "TRUE" in response.content.upper()
+        except Exception:
             return False
-        text_lower = text.lower()
-        if '?' in text_lower:
-            return True
-        return any(re.search(pat, text_lower) for pat in QUESTION_PATTERNS)
 
     @classmethod
     async def is_valid_name(cls, text: str) -> bool:
-        if not text:
-            return False
-            
-        text = text.strip()
-        text_lower = text.lower()
-
-        # --- 1. LOCAL PRE-FILTERS ---
-        if cls.is_profanity_or_hostile(text_lower) or cls.is_human_handoff_requested(text_lower):
+        # Fast local filter to save API calls
+        if not text or len(text) < 2 or len(text) > 50 or re.search(r'\d', text) or '@' in text:
             return False
 
-        if not (2 <= len(text) <= 50) or len(text.split()) > 4:
-            return False
-            
-        if '@' in text or re.search(r'http[s]?://', text) or re.search(r'\d', text):
-            return False
-            
-        if cls.detect_service(text_lower):
-            return False
-            
-        for kw in INTENT_KEYWORDS:
-            if re.search(rf'\b{re.escape(kw)}\b', text_lower):
-                return False
-                
-        if not re.fullmatch(r'[A-Za-zА-Яа-яІіЇїЄєҐґĚŠČŘŽÝÁÍÉÓÚŮĎŤŇěščřžýáíéóúůďťň\s\-\']+', text):
-            return False
-            
-        if re.search(r'[bcdfghjklmnpqrstvwxyzбвгґджзклмнпрстфхцчшщ]{6,}', text_lower):
-            return False
+        prompt = f"""You are a strict data validation assistant.
+Check if this text is a human name (First, Last, or both).
+Reject greetings (like "Dobry den"), questions, phrases, or random text.
 
-        # --- 2. THE LLM SMART FILTER USING YOUR LANGCHAIN SETUP ---
-        prompt = f"""You are a strict data validation assistant. 
-Your task is to check if the following text is a valid human name (First name, Last name, or both).
-The name might be in English, Czech, Ukrainian, or Russian.
+Text: "{text}"
 
-CRITICAL RULES:
-- If it is a valid name, reply EXACTLY with the word: TRUE
-- If it is a greeting, a question, a conversational phrase (e.g., "Nerozumím", "I don't know", "Yes", "No", "Що"), or random garbage, reply EXACTLY with the word: FALSE
+Reply ONLY with the word "TRUE" if it is a valid name, or "FALSE" otherwise."""
 
-Text to validate: "{text}"
-"""
         try:
-            # We use a fast, cheap model with 0 temperature for strict logic tasks
-            llm = get_llm(model="gpt-4o-mini", temperature=0)
-            
-            # Call LangChain asynchronously 
+            llm = get_llm(model=settings.llm_model, temperature=0)
             response = await llm.ainvoke([HumanMessage(content=prompt)])
-            
-            # response.content contains the actual string from the AI
-            result = response.content.strip().upper()
-            return "TRUE" in result
-            
+            return "TRUE" in response.content.upper()
         except Exception as e:
-            print(f"LLM Name Validation Error: {e}")
-            # If the API fails for some reason, we assume it's valid so the bot doesn't break
-            return True
+            print(f"Validation Error: {e}")
+            return True # Fallback to True so the bot doesn't crash
 
     @classmethod
     def extract_phone(cls, text: str) -> Optional[str]:

@@ -10,6 +10,10 @@ from src.ai.conversation_agent.agent_rules.strings import (
     HUMAN_HANDOFF_PATTERNS
 )
 
+# IMPORT YOUR LLM SETUP HERE:
+from src.ai.knowledge.llm import get_llm
+from langchain_core.messages import HumanMessage
+
 class FormValidator:
     """Production-grade validator for lead collection form steps."""
 
@@ -75,13 +79,14 @@ class FormValidator:
         return any(re.search(pat, text_lower) for pat in QUESTION_PATTERNS)
 
     @classmethod
-    def is_valid_name(cls, text: str) -> bool:
+    async def is_valid_name(cls, text: str) -> bool:
         if not text:
             return False
             
         text = text.strip()
         text_lower = text.lower()
 
+        # --- 1. LOCAL PRE-FILTERS ---
         if cls.is_profanity_or_hostile(text_lower) or cls.is_human_handoff_requested(text_lower):
             return False
 
@@ -101,11 +106,35 @@ class FormValidator:
         if not re.fullmatch(r'[A-Za-zА-Яа-яІіЇїЄєҐґĚŠČŘŽÝÁÍÉÓÚŮĎŤŇěščřžýáíéóúůďťň\s\-\']+', text):
             return False
             
-        # Gibberish check: Reject 6+ consecutive consonants
         if re.search(r'[bcdfghjklmnpqrstvwxyzбвгґджзклмнпрстфхцчшщ]{6,}', text_lower):
             return False
 
-        return True
+        # --- 2. THE LLM SMART FILTER USING YOUR LANGCHAIN SETUP ---
+        prompt = f"""You are a strict data validation assistant. 
+Your task is to check if the following text is a valid human name (First name, Last name, or both).
+The name might be in English, Czech, Ukrainian, or Russian.
+
+CRITICAL RULES:
+- If it is a valid name, reply EXACTLY with the word: TRUE
+- If it is a greeting, a question, a conversational phrase (e.g., "Nerozumím", "I don't know", "Yes", "No", "Що"), or random garbage, reply EXACTLY with the word: FALSE
+
+Text to validate: "{text}"
+"""
+        try:
+            # We use a fast, cheap model with 0 temperature for strict logic tasks
+            llm = get_llm(model="gpt-4o-mini", temperature=0)
+            
+            # Call LangChain asynchronously 
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            
+            # response.content contains the actual string from the AI
+            result = response.content.strip().upper()
+            return "TRUE" in result
+            
+        except Exception as e:
+            print(f"LLM Name Validation Error: {e}")
+            # If the API fails for some reason, we assume it's valid so the bot doesn't break
+            return True
 
     @classmethod
     def extract_phone(cls, text: str) -> Optional[str]:

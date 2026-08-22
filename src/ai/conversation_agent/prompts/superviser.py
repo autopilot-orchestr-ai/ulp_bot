@@ -18,4 +18,5 @@ CRITICAL RULE FOR CONTEXT: Focus strictly on the core intent of the LATEST messa
    - "connect me with a manager"
    - "I'd like to book/order this"
    - Client describes their personal legal case/problem in detail.
+   - The user explicitly answers "Yes" (or "Так", "Да", "Ano") to the bot's question about whether they want a manager to contact them to process the request.
 """

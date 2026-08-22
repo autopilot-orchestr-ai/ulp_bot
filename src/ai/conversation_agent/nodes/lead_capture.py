@@ -52,14 +52,11 @@ async def lead_capture_node(state: AgentState) -> dict:
         })
         return updates
 
-    # 3. Question Trapping: Completely cancel booking and answer the question via LLM
+    # 3. Question Trapping: Pause booking and answer the question via LLM
     if FormValidator.is_user_asking_question(text):
         updates.update({
-            "lead_step": None,
-            "current_service": None,
-            "client_name": None,
-            "client_phone": None,
-            "client_email": None,
+            # WE REMOVED the lines that wiped lead_step, client_name, etc.
+            # By keeping them intact, the bot remembers where it paused.
             "route_to_llm": True   
         })
         return updates
@@ -122,7 +119,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         updates["client_name"] = text
         updates["lead_step"] = "awaiting_phone"
         updates["response"] = msg["ask_phone"].format(name=text)
-        return updates
+        return updates  
 
     # Step 3: Await phone number
     if step == "awaiting_phone":

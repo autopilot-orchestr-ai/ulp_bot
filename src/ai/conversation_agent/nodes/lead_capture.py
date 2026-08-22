@@ -27,7 +27,6 @@ async def lead_capture_node(state: AgentState) -> dict:
     updates = {}
 
     # 1. BREAK THE LOOP: If the form was already completed, wipe the state.
-    # We do NOT return here; we let the bot process their new message as a fresh start.
     if step == "completed":
         step = None
         updates.update({
@@ -38,7 +37,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             "client_email": None,
         })
 
-    # 2. Profanity Check (Regex updated at the bottom of the file)
+    # 2. Profanity Check
     if await FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Введіть дані коректно або задайте ваше питання.",
@@ -52,11 +51,9 @@ async def lead_capture_node(state: AgentState) -> dict:
         })
         return updates
 
-    # 3. Question Trapping: Pause booking and answer the question via LLM
-    if await FormValidator.is_user_asking_question(text):
+    # 3. Question Trapping: Pause booking ONLY if already in the middle of the form
+    if step in ["awaiting_name", "awaiting_phone", "awaiting_email"] and await FormValidator.is_user_asking_question(text):
         updates.update({
-            # WE REMOVED the lines that wiped lead_step, client_name, etc.
-            # By keeping them intact, the bot remembers where it paused.
             "route_to_llm": True   
         })
         return updates
@@ -84,12 +81,14 @@ async def lead_capture_node(state: AgentState) -> dict:
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no specific service is mentioned yet, DO NOT capture a "None" lead.
-        # Wipe state and route to LLM so it can read YAML and list the actual services.
+        # If no specific service is mentioned yet, ask them to clarify instead of looping to LLM
         if not service:
+            # We assume SERVICES_LIST_RESPONSE is a dict structured like {"en": "...", "cs": "..."}
+            list_response = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE.get("en", "Please specify a service."))
             updates.update({
                 "lead_step": None,
-                "route_to_llm": True
+                "route_to_llm": False,
+                "response": list_response
             })
             return updates
 

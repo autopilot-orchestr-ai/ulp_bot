@@ -1,3 +1,4 @@
+import re
 from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
@@ -7,7 +8,8 @@ from src.ai.conversation_agent.agent_rules.strings import (
     PHONE_REPROMPT, 
     EMAIL_REPROMPT, 
     NAME_REPROMPT,
-    SERVICES_LIST_RESPONSE
+    SERVICES_LIST_RESPONSE,
+    WORKING_HOURS_MSG
 )
 from src.ai.conversation_agent.agent_rules.lang import get_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
@@ -18,15 +20,25 @@ async def lead_capture_node(state: AgentState) -> dict:
     incoming = FormValidator.get_val(state, "incoming")
     raw_text = FormValidator.get_val(incoming, "text", "") or ""
     text = raw_text.strip()
+    text_lower = text.lower()
     
     step = FormValidator.get_val(state, "lead_step")
     lang = get_lang(state)
+
+    # 1. FIX LANGUAGE LOCK: Dynamic override if user switches language mid-funnel
+    if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or any(w in text_lower for w in ["potřebuju", "chci", "česky", "nerozumím"]):
+        lang = "cs"
+    elif re.search(r'[ыъэё]', text_lower) or any(w in text_lower for w in ["пожалуйста", "нужен", "хочу"]):
+        lang = "ru"
+    elif re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "хочу", "будь ласка"]):
+        lang = "uk"
+
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
 
     updates = {}
 
-    # 1. BREAK THE LOOP: If the form was already completed, wipe the state.
+    # 2. BREAK THE LOOP: If the form was already completed, wipe the state.
     if step == "completed":
         step = None
         updates.update({
@@ -37,7 +49,7 @@ async def lead_capture_node(state: AgentState) -> dict:
             "client_email": None,
         })
 
-    # 2. Profanity Check
+    # 3. Profanity Check
     if await FormValidator.is_profanity_or_hostile(text):
         profanity_warnings = {
             "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Введіть дані коректно або задайте ваше питання.",
@@ -51,14 +63,29 @@ async def lead_capture_node(state: AgentState) -> dict:
         })
         return updates
 
-    # 3. Question Trapping: Pause booking ONLY if already in the middle of the form
-    if step in ["awaiting_name", "awaiting_phone", "awaiting_email"] and await FormValidator.is_user_asking_question(text):
+    # 4. "WHEN WILL YOU CALL ME?" INTERCEPTOR
+    has_time = any(k in text_lower for k in ["коли", "when", "kdy", "во сколько"])
+    has_call = any(k in text_lower for k in ["зателефону", "call", "zavol", "позвон", "зв'яж", "kontakt"])
+    if has_time and has_call:
+        updates.update({
+            "route_to_llm": False,
+            "response": WORKING_HOURS_MSG.get(lang, WORKING_HOURS_MSG["en"])
+        })
+        return updates
+
+    # 5. FIX QUESTION/CONFUSION TRAP
+    is_q = await FormValidator.is_user_asking_question(text)
+    # Hardcoded safety net: if LLM fails, but obvious signs of confusion/questions exist
+    if not is_q and ("?" in text or "nerozumím" in text_lower or "не розумію" in text_lower or "не понимаю" in text_lower):
+        is_q = True
+
+    if step in ["awaiting_name", "awaiting_phone", "awaiting_email"] and is_q:
         updates.update({
             "route_to_llm": True   
         })
         return updates
 
-    # 4. Cancel Check
+    # 6. Cancel Check
     if await FormValidator.is_user_cancelling(text):
         cancel_msgs = {
             "uk": "Зрозумів, скасував запис. Якщо виникнуть питання — запитуйте!",
@@ -81,9 +108,8 @@ async def lead_capture_node(state: AgentState) -> dict:
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no specific service is mentioned yet, ask them to clarify instead of looping to LLM
+        # If no specific service is mentioned, list them in the correct language
         if not service:
-            # We assume SERVICES_LIST_RESPONSE is a dict structured like {"en": "...", "cs": "..."}
             list_response = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE.get("en", "Please specify a service."))
             updates.update({
                 "lead_step": None,

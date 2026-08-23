@@ -162,3 +162,10 @@ SERVICES_LIST_RESPONSE = {
     "cs": "Zde je seznam služeb, které poskytujeme:\n\n1. **Právní poradenství**\n2. **Vízové poradenství**\n3. **Soudní překlady**\n4. **Apostila**\n5. **Plné moci**\n6. **Úřední prohlášení**\n7. **Výpis z rejstříku trestů z Ukrajiny**\n8. **Asistence při sňatku**\n9. **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
     "en": "Here is the list of services we provide:\n\n1. **Legal Consultations**\n2. **Visa Consultations**\n3. **Sworn Translations**\n4. **Apostille**\n5. **Powers of Attorney**\n6. **Official Statements**\n7. **Police Clearance Certificate from Ukraine**\n8. **Marriage Support**\n9. **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
 }
+
+WORKING_HOURS_MSG = {
+    "uk": "З Вами зв'яжуться в найкоротші строки під час нашого робочого дня з понеділка по п'ятницю між 8:00 та 17:00.",
+    "cs": "Budeme vás kontaktovat co nejdříve během naší pracovní doby od pondělí do pátku mezi 8:00 a 17:00.",
+    "en": "You will be contacted as soon as possible during our working hours, Monday to Friday between 8:00 AM and 5:00 PM.",
+    "ru": "С вами свяжутся в кратчайшие сроки в течение нашего рабочего дня с понедельника по пятницу с 8:00 до 17:00."
+}

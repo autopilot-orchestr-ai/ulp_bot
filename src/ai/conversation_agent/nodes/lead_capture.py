@@ -112,7 +112,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         if not service:
             list_response = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE.get("en", "Please specify a service."))
             updates.update({
-                "lead_step": None,
+                "lead_step": "awaiting_service", # <--- FIX: Move them to a new state instead of None
                 "route_to_llm": False,
                 "response": list_response
             })
@@ -129,6 +129,35 @@ async def lead_capture_node(state: AgentState) -> dict:
         updates["response"] = start_response
         return updates
 
+    # Step 1.5: Await Service Selection
+    if step == "awaiting_service":
+        detected_id = FormValidator.detect_service(text)
+        
+        if detected_id:
+            # We save the clean ID to the database/CRM state
+            updates["current_service"] = detected_id
+            updates["lead_step"] = "awaiting_name"
+            
+            # Fetch the beautifully translated name for the chat interface!
+            # (Requires importing SERVICE_LOCALIZED_NAMES from your validator file)
+            localized_srv = SERVICE_LOCALIZED_NAMES.get(detected_id, {}).get(lang, detected_id)
+            
+            reprompt = {
+                "en": f"Got it, you are interested in the service: **{localized_srv}**!\n\nHow should I address you? Please enter your **Full Name**:",
+                "cs": f"Rozumím, máte zájem o službu: **{localized_srv}**!\n\nJak vás mohu oslovovat? Uveďte prosím vaše **Jméno a Příjmení**:",
+                "uk": f"Зрозумів, вас цікавить послуга: **{localized_srv}**!\n\nА як до вас звертатися? Вкажіть, будь ласка, ваше **Прізвище та Ім'я**:",
+                "ru": f"Понял, вас интересует услуга: **{localized_srv}**!\n\nКак к вам обращаться? Укажите, пожалуйста, ваше **Имя и Фамилию**:",
+            }
+            updates["response"] = reprompt.get(lang, reprompt["en"])
+            return updates
+        else:
+            # LOOP BREAKER (as implemented previously)
+            updates.update({
+                "route_to_llm": True,
+                "lead_step": None 
+            })
+            return updates
+        
     # Step 2: Await full name
     if step == "awaiting_name":
         detected_srv = FormValidator.detect_service(text)

@@ -27,10 +27,14 @@ class FormValidator:
     def detect_service(cls, text: str) -> Optional[str]:
         if not text:
             return None
+        
         text_lower = text.lower()
-        for pattern, service_title in SERVICE_PATTERNS.items():
+        
+        # Search all languages using the multilingual regex patterns
+        for pattern, service_id in SERVICE_PATTERNS.items():
             if re.search(pattern, text_lower):
-                return service_title
+                return service_id
+                
         return None
 
     @classmethod

@@ -31,15 +31,43 @@ _UK_CHARS = set("іїєґІЇЄҐ")
 
 # --- Service & Intent Patterns ---
 
+# Maps multilingual regex matches to a standard Internal ID
 SERVICE_PATTERNS = {
-    r'кон[сзм][уь]?ль?т': "Консультація",
-    r'переклад': "Судові переклади",
-    r'довір': "Довіреність",
-    r'апостил': "Апостиль",
-    r'заяв': "Офіційні заяви",
-    r'несудим': "Довідка про несудимість",
-    r'одруж|брак|шлюб': "Супровід при одруженні",
-    r'дублікат': "Дублікати документів",
+    # ⚖️ Consultations (Legal & Visa - captures UK, RU, CS, EN)
+    r'кон[сзм][уь]?ль?т|юрист|віз|виз|poradenstv|konzultac|víz|viz|consult|legal|visa': "consultation",
+    
+    # 📄 Translations (captures UK, RU, CS, EN)
+    r'переклад|перевод|překlad|preklad|translat': "translation",
+    
+    # 📑 Power of Attorney (captures UK, RU, CS, EN + declensions like 'plnou moc')
+    r'довір|довер|pln[aeáé]\s?moc|plnou\s?moc|power\s?of\s?attorney': "poa",
+    
+    # 🔏 Apostille 
+    r'апостил|apostil': "apostille",
+    
+    # ✍️ Official Statements & Consents
+    r'заяв|згод|согласи|prohlášen|prohlasen|souhlas|statement|consent': "statement",
+    
+    # 🏛️ Police Clearance 
+    r'несудим|trest|rejstřík|rejstrik|police\s?clearance|criminal': "police_clearance",
+    
+    # 💍 Marriage Support (captures UK, RU, CS, EN)
+    r'одруж|брак|шлюб|свадьб|sňatk|snatk|svatb|marriag|weddin': "marriage",
+    
+    # 🗂️ Document Duplicates
+    r'дублікат|дубликат|duplikát|duplikat|duplicat': "duplicates",
+}
+
+# Translates the Internal ID back to the correct language for the bot's response
+SERVICE_LOCALIZED_NAMES = {
+    "consultation": {"uk": "Консультації", "ru": "Консультации", "cs": "Konzultace", "en": "Consultations"},
+    "translation": {"uk": "Судові переклади", "ru": "Судебные переводы", "cs": "Soudní překlady", "en": "Sworn Translations"},
+    "poa": {"uk": "Довіреності", "ru": "Доверенности", "cs": "Plné moci", "en": "Powers of Attorney"},
+    "apostille": {"uk": "Апостиль", "ru": "Апостиль", "cs": "Apostila", "en": "Apostille"},
+    "statement": {"uk": "Офіційні заяви", "ru": "Официальные заявления", "cs": "Úřední prohlášení", "en": "Official Statements"},
+    "police_clearance": {"uk": "Довідка про несудимість", "ru": "Справка о несудимости", "cs": "Výpis z rejstříku trestů", "en": "Police Clearance Certificate"},
+    "marriage": {"uk": "Супровід при одруженні", "ru": "Сопровождение при бракосочетании", "cs": "Asistence při sňatku", "en": "Marriage Support"},
+    "duplicates": {"uk": "Дублікати документів", "ru": "Дубликаты документов", "cs": "Duplikáty dokumentů", "en": "Document Duplicates"},
 }
 
 QUESTION_PATTERNS = [
@@ -157,10 +185,13 @@ NAME_REPROMPT = {
 }
 
 SERVICES_LIST_RESPONSE = {
-    "uk": "Ось перелік послуг, які ми надаємо:\n\n1. **Юридичні консультації**\n2. **Візові консультації**\n3. **Судові переклади**\n4. **Апостиль**\n5. **Довіреності**\n6. **Офіційні заяви**\n7. **Довідка про несудимість з України**\n8. **Супровід при одруженні**\n9. **Дублікати документів з України**\n\nЯка саме послуга вас цікавить?",
-    "ru": "Вот перечень услуг, которые мы предоставляем:\n\n1. **Юридические консультации**\n2. **Визовые консультации**\n3. **Судебные переводы**\n4. **Апостиль**\n5. **Доверенности**\n6. **Официальные заявления**\n7. **Справка о несудимости из Украины**\n8. **Сопровождение при бракосочетании**\n9. **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
-    "cs": "Zde je seznam služeb, které poskytujeme:\n\n1. **Právní poradenství**\n2. **Vízové poradenství**\n3. **Soudní překlady**\n4. **Apostila**\n5. **Plné moci**\n6. **Úřední prohlášení**\n7. **Výpis z rejstříku trestů z Ukrajiny**\n8. **Asistence při sňatku**\n9. **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
-    "en": "Here is the list of services we provide:\n\n1. **Legal Consultations**\n2. **Visa Consultations**\n3. **Sworn Translations**\n4. **Apostille**\n5. **Powers of Attorney**\n6. **Official Statements**\n7. **Police Clearance Certificate from Ukraine**\n8. **Marriage Support**\n9. **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
+    "uk": "Ось перелік послуг, які ми надаємо:\n\n⚖️ **Юридичні консультації**\n🛂 **Візові консультації**\n📄 **Завірені судові переклади**\n🔏 **Апостиль документів**\n📑 **Складення довіреностей**\n✍️ **Офіційні заяви** (згода на виїзд, спадщина)\n🏛️ **Довідка про несудимість з України**\n💍 **Супровід при одруженні в Чехії**\n🗂️ **Дублікати документів з України**\n\nЯка саме послуга вас цікавить?",
+    
+    "ru": "Вот перечень услуг, которые мы предоставляем:\n\n⚖️ **Юридические консультации**\n🛂 **Визовые консультации**\n📄 **Заверенные судебные переводы**\n🔏 **Апостиль документов**\n📑 **Составление доверенностей**\n✍️ **Официальные заявления** (согласие на выезд, наследство)\n🏛️ **Справка об отсутствии судимости из Украины**\n💍 **Сопровождение при бракосочетании в Чехии**\n🗂️ **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
+    
+    "cs": "Zde je seznam služeb, které poskytujeme:\n\n⚖️ **Právní konzultace**\n🛂 **Vízové konzultace**\n📄 **Soudní překlady**\n🔏 **Apostila**\n📑 **Plné moci**\n✍️ **Oficiální prohlášení** (souhlas s cestou, dědictví)\n🏛️ **Výpis z rejstříku trestů z Ukrajiny**\n💍 **Asistence při sňatku**\n🗂️ **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
+    
+    "en": "Here is the list of services we provide:\n\n⚖️ **Legal Consultations**\n🛂 **Visa Consultations**\n📄 **Certified Translations**\n🔏 **Apostille**\n📑 **Powers of Attorney**\n✍️ **Official Statements** (child travel consent, inheritance)\n🏛️ **Police Clearance Certificate from Ukraine**\n💍 **Marriage Support Package**\n🗂️ **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
 }
 
 WORKING_HOURS_MSG = {

@@ -2,15 +2,18 @@ import re
 from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
+
+# Updated Imports: 
 from src.ai.conversation_agent.agent_rules.strings import (
     MESSAGES, 
     WEEKEND_NOTICES, 
     PHONE_REPROMPT, 
-    EMAIL_REPROMPT, 
     NAME_REPROMPT,
     SERVICES_LIST_RESPONSE,
-    WORKING_HOURS_MSG
+    WHEN_WILL_YOU_CALL_RESPONSE, # Added this
+    SERVICE_LOCALIZED_NAMES,
 )
+
 from src.ai.conversation_agent.agent_rules.lang import get_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 
@@ -69,7 +72,8 @@ async def lead_capture_node(state: AgentState) -> dict:
     if has_time and has_call:
         updates.update({
             "route_to_llm": False,
-            "response": WORKING_HOURS_MSG.get(lang, WORKING_HOURS_MSG["en"])
+            # FIX: Use the new variable name here instead of WORKING_HOURS_MSG
+            "response": WHEN_WILL_YOU_CALL_RESPONSE.get(lang, WHEN_WILL_YOU_CALL_RESPONSE["en"]) 
         })
         return updates
 
@@ -108,20 +112,21 @@ async def lead_capture_node(state: AgentState) -> dict:
     if not step or step == "start":
         service = FormValidator.extract_service_from_history(history, current_text=text)
         
-        # If no specific service is mentioned, list them in the correct language
-        if not service:
-            list_response = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE.get("en", "Please specify a service."))
+        # STRICT FIX: Catch None type, empty strings, and the literal string "None"
+        if not service or str(service).strip().lower() == "none" or str(service).strip() == "":
+            list_response = SERVICES_LIST_RESPONSE.get(lang, SERVICES_LIST_RESPONSE["en"])
             updates.update({
-                "lead_step": "awaiting_service", # <--- FIX: Move them to a new state instead of None
+                "lead_step": "awaiting_service",
                 "route_to_llm": False,
                 "response": list_response
             })
             return updates
 
+        # If a valid service IS found:
         updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service
 
-        start_response = msg["start"]
+        start_response = msg.get("start", "")
         if FormValidator.has_weekend_mention(text):
             notice = WEEKEND_NOTICES.get(lang, WEEKEND_NOTICES["en"])
             start_response = notice + start_response
@@ -163,11 +168,15 @@ async def lead_capture_node(state: AgentState) -> dict:
         detected_srv = FormValidator.detect_service(text)
         if detected_srv:
             updates["current_service"] = detected_srv
+            
+            # FIX: Fetch the beautifully translated name!
+            localized_srv = SERVICE_LOCALIZED_NAMES.get(detected_srv, {}).get(lang, detected_srv)
+            
             reprompt = {
-                "en": f"Got it, you are interested in **{detected_srv}**!\n\nHow should I address you? Please enter your **Full Name**:",
-                "cs": f"Rozumím, máte zájem o **{detected_srv}**!\n\nJak vás mohu oslovovat? Uveďte prosím vaše **Jméno a Příjmení**:",
-                "uk": f"Зрозумів, вас цікавить **{detected_srv}**!\n\nА як до вас звертатися? Вкажіть, будь ласка, ваше **Прізвище та Ім'я**:",
-                "ru": f"Понял, вас интересует **{detected_srv}**!\n\nКак к вам обращаться? Укажите, пожалуйста, ваше **Имя и Фамилию**:",
+                "en": f"Got it, you are interested in **{localized_srv}**!\n\nHow should I address you? Please enter your **Full Name**:",
+                "cs": f"Rozumím, máte zájem o **{localized_srv}**!\n\nJak vás mohu oslovovat? Uveďte prosím vaše **Jméno a Příjmení**:",
+                "uk": f"Зрозумів, вас цікавить **{localized_srv}**!\n\nА як до вас звертатися? Вкажіть, будь ласка, ваше **Прізвище та Ім'я**:",
+                "ru": f"Понял, вас интересует **{localized_srv}**!\n\nКак к вам обращаться? Укажите, пожалуйста, ваше **Имя и Фамилию**:",
             }
             updates["response"] = reprompt.get(lang, reprompt["en"])
             return updates
@@ -179,7 +188,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         updates["client_name"] = text
         updates["lead_step"] = "awaiting_phone"
         updates["response"] = msg["ask_phone"].format(name=text)
-        return updates  
+        return updates
 
     # Step 3: Await phone number
     if step == "awaiting_phone":
@@ -206,8 +215,9 @@ async def lead_capture_node(state: AgentState) -> dict:
         email = await FormValidator.extract_email(text)
         is_skip = text.lower() in ["ні", "нет", "no", "ne", "-", "пропустити", "пропустить", "немає", "нет емейла"]
 
+        # This will crash if EMAIL_REPROMPT no longer exists in strings.py!
         if not email and not is_skip:
-            updates["response"] = EMAIL_REPROMPT.get(lang, EMAIL_REPROMPT["en"])
+            updates["response"] = msg["ask_email"]
             return updates
 
         final_email = email if email else "Not specified"

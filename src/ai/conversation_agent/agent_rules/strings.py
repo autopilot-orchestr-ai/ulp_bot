@@ -33,28 +33,16 @@ _UK_CHARS = set("іїєґІЇЄҐ")
 
 # Maps multilingual regex matches to a standard Internal ID
 SERVICE_PATTERNS = {
-    # ⚖️ Consultations (Legal & Visa - captures UK, RU, CS, EN)
-    r'кон[сзм][уь]?ль?т|юрист|віз|виз|poradenstv|konzultac|víz|viz|consult|legal|visa': "consultation",
+    # ⚖️ Consultations (Now includes právník, advokát, lawyer, etc.)
+    r'кон[сзм][уь]?ль?т|юрист|віз|виз|poradenstv|konzultac|víz|viz|consult|legal|visa|právník|pravnik|advokát|advokat|lawyer|адвокат': "consultation",
     
-    # 📄 Translations (captures UK, RU, CS, EN)
+    # ... keep the rest of your patterns exactly as we set them up earlier ...
     r'переклад|перевод|překlad|preklad|translat': "translation",
-    
-    # 📑 Power of Attorney (captures UK, RU, CS, EN + declensions like 'plnou moc')
     r'довір|довер|pln[aeáé]\s?moc|plnou\s?moc|power\s?of\s?attorney': "poa",
-    
-    # 🔏 Apostille 
     r'апостил|apostil': "apostille",
-    
-    # ✍️ Official Statements & Consents
     r'заяв|згод|согласи|prohlášen|prohlasen|souhlas|statement|consent': "statement",
-    
-    # 🏛️ Police Clearance 
     r'несудим|trest|rejstřík|rejstrik|police\s?clearance|criminal': "police_clearance",
-    
-    # 💍 Marriage Support (captures UK, RU, CS, EN)
     r'одруж|брак|шлюб|свадьб|sňatk|snatk|svatb|marriag|weddin': "marriage",
-    
-    # 🗂️ Document Duplicates
     r'дублікат|дубликат|duplikát|duplikat|duplicat': "duplicates",
 }
 
@@ -170,13 +158,6 @@ PHONE_REPROMPT = {
     "ru": "Пожалуйста, укажите **действительный номер телефона** для связи (например: +420 123 456 789):",
 }
 
-EMAIL_REPROMPT = {
-    "en": "Please provide a **valid Email** (e.g.: name@gmail.com) or type **'no'** if you prefer not to provide one:",
-    "cs": "Uveďte prosím **platný e-mail** (např.: name@gmail.com) nebo napište **'ne'**, pokud e-mail nechcete zadat:",
-    "uk": "Будь ласка, вкажіть **коректний Email** (наприклад: name@gmail.com) або напишіть **'ні'**, якщо не бажаєте вказувати пошту:",
-    "ru": "Пожалуйста, укажите **корректный Email** (например: name@gmail.com) или напишите **'нет'**, если не хотите указывать почту:",
-}
-
 NAME_REPROMPT = {
     "en": "Please provide your real **First and Last Name** (e.g.: Peter Parker):",
     "cs": "Uveďte prosím své skutečné **Jméno a Příjmení** (např.: Honza Novakov):",
@@ -186,12 +167,16 @@ NAME_REPROMPT = {
 
 SERVICES_LIST_RESPONSE = {
     "uk": "Ось перелік послуг, які ми надаємо:\n\n⚖️ **Юридичні консультації**\n🛂 **Візові консультації**\n📄 **Завірені судові переклади**\n🔏 **Апостиль документів**\n📑 **Складення довіреностей**\n✍️ **Офіційні заяви** (згода на виїзд, спадщина)\n🏛️ **Довідка про несудимість з України**\n💍 **Супровід при одруженні в Чехії**\n🗂️ **Дублікати документів з України**\n\nЯка саме послуга вас цікавить?",
-    
     "ru": "Вот перечень услуг, которые мы предоставляем:\n\n⚖️ **Юридические консультации**\n🛂 **Визовые консультации**\n📄 **Заверенные судебные переводы**\n🔏 **Апостиль документов**\n📑 **Составление доверенностей**\n✍️ **Официальные заявления** (согласие на выезд, наследство)\n🏛️ **Справка об отсутствии судимости из Украины**\n💍 **Сопровождение при бракосочетании в Чехии**\n🗂️ **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
-    
     "cs": "Zde je seznam služeb, které poskytujeme:\n\n⚖️ **Právní konzultace**\n🛂 **Vízové konzultace**\n📄 **Soudní překlady**\n🔏 **Apostila**\n📑 **Plné moci**\n✍️ **Oficiální prohlášení** (souhlas s cestou, dědictví)\n🏛️ **Výpis z rejstříku trestů z Ukrajiny**\n💍 **Asistence při sňatku**\n🗂️ **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
-    
     "en": "Here is the list of services we provide:\n\n⚖️ **Legal Consultations**\n🛂 **Visa Consultations**\n📄 **Certified Translations**\n🔏 **Apostille**\n📑 **Powers of Attorney**\n✍️ **Official Statements** (child travel consent, inheritance)\n🏛️ **Police Clearance Certificate from Ukraine**\n💍 **Marriage Support Package**\n🗂️ **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
+}
+
+WHEN_WILL_YOU_CALL_RESPONSE = {
+    "uk": "З Вами зв'яжуться в найкоротші строки під час нашого робочого дня з понеділка по п'ятницю між 8:00 та 17:00.",
+    "ru": "С Вами свяжутся в кратчайшие сроки в наши рабочие часы с понедельника по пятницу с 8:00 до 17:00.",
+    "cs": "Budeme vás kontaktovat co nejdříve během naší pracovní doby od pondělí do pátku mezi 8:00 a 17:00.",
+    "en": "We will contact you as soon as possible during our working hours, Monday to Friday between 8:00 and 17:00."
 }
 
 WORKING_HOURS_MSG = {
@@ -199,4 +184,11 @@ WORKING_HOURS_MSG = {
     "cs": "Budeme vás kontaktovat co nejdříve během naší pracovní doby od pondělí do pátku mezi 8:00 a 17:00.",
     "en": "You will be contacted as soon as possible during our working hours, Monday to Friday between 8:00 AM and 5:00 PM.",
     "ru": "С вами свяжутся в кратчайшие сроки в течение нашего рабочего дня с понедельника по пятницу с 8:00 до 17:00."
+}
+
+SUCCESS_MESSAGE = {
+    "uk": "✅ Дякуємо! Усі дані отримано. Наш менеджер зв'яжеться з вами найближчим часом у робочі години.",
+    "ru": "✅ Спасибо! Все данные получены. Наш менеджер свяжется с вами в ближайшее время в рабочие часы.",
+    "cs": "✅ Děkujeme! Všechny údaje byly přijaty. Náš manažer vás bude brzy kontaktovat během pracovní doby.",
+    "en": "✅ Thank you! All details have been received. Our manager will contact you shortly during working hours."
 }

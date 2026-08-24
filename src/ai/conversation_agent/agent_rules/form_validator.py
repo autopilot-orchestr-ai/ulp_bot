@@ -176,3 +176,22 @@ Reply ONLY with TRUE or FALSE."""
         if not text:
             return False
         return any(kw in text.lower() for kw in WEEKEND_KEYWORDS)
+
+    @staticmethod
+    def is_asking_call_timing(text: str) -> bool:
+        """"When will you call me?" style question, usable both inside and outside the lead form."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        has_time = any(k in text_lower for k in ["коли", "when", "kdy", "во сколько"])
+        has_call = any(k in text_lower for k in ["зателефону", "call", "zavol", "позвон", "зв'яж", "kontakt"])
+        return has_time and has_call
+
+    @staticmethod
+    def has_price_been_shown(history: List[Dict], lookback: int = 6) -> bool:
+        """Heuristic gate: only start collecting name/phone/email once the client has actually
+        seen pricing (our FAQ prompt always quotes CZK), per the funnel described in conversation.py."""
+        for m in reversed(history[-lookback:]):
+            if isinstance(m, dict) and m.get("role") == "assistant" and "CZK" in (m.get("content") or ""):
+                return True
+        return False

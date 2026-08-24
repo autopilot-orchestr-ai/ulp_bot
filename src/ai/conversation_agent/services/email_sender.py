@@ -4,7 +4,7 @@ from email.message import EmailMessage
 import aiosmtplib
 
 from src.logger import log_event
-from src.ai.conversation_agent.data.strings import _PRAGUE_TZ
+from src.ai.conversation_agent.agent_rules.strings import _PRAGUE_TZ
 from src.config import settings
 
 

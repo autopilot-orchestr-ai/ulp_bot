@@ -91,5 +91,33 @@ async def notify_manager_contacts_telegram(user: User, user_text: str) -> None:
     )
 
 
+async def notify_manager_aggressive_telegram(
+    client_id: str,
+    client_name: str | None,
+    text: str,
+    lang: str = "uk",
+) -> None:
+    """Flag a hostile/aggressive client message for staff review. Non-blocking — the bot
+    keeps answering the client normally regardless of this notification's outcome."""
+    chat_id = getattr(settings, "staff_telegram_chat_id", None) or getattr(settings, "STAFF_TELEGRAM_CHAT_ID", None)
+    if not chat_id:
+        return
+
+    from src.bots.tgbot.bot import bot  # lazy import — breaks the cycle
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"⚠️ <b>[АГРЕСИВНЕ ПОВІДОМЛЕННЯ] Клієнт написав щось грубе</b>\n\n"
+            f"🆔 <b>Client ID:</b> <code>{client_id}</code>\n"
+            f"📛 <b>Ім'я:</b> {client_name or 'Not specified'}\n"
+            f"🌐 <b>Мова:</b> {lang.upper()}\n"
+            f"💬 <b>Повідомлення:</b> <i>\"{text}\"</i>\n\n"
+            f"👉 <i>Бот продовжує відповідати клієнту в звичайному режимі — це лише для вашої обізнаності.</i>"
+        ),
+        parse_mode="HTML",
+    )
+
+
 async def notify_staff_instagram() -> None:
     pass

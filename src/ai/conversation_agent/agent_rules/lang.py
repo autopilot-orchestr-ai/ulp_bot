@@ -2,7 +2,7 @@ from typing import Any
 from src.ai.conversation_agent.agent_rules.strings import _UK_CHARS, _CZECH_WORDS, _CZECH_CHARS
 from src.ai.conversation_agent.state import AgentState
 
-_UK_SPECIFIC_WORDS = {"о", "до", "наступний", "прийду", "хочу", "змінити", "дата", "підходить", "було", "якщо"}
+_UK_SPECIFIC_WORDS = {"наступний", "прийду", "змінити", "підходить", "було", "якщо"}
 _SUPPORTED_LANGS = {"uk", "ru", "en", "cs"}
 
 

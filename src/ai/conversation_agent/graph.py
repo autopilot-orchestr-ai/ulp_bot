@@ -7,6 +7,7 @@ from src.ai.conversation_agent.nodes.info import info_agent
 from src.ai.conversation_agent.nodes.escalation import escalate
 from src.ai.conversation_agent.nodes.off_topic import off_topic_reply
 from src.ai.conversation_agent.nodes.lead_capture import lead_capture_node
+from src.ai.conversation_agent.nodes.call_timing import call_timing_reply
 
 
 def _route_intent(state: AgentState) -> str:
@@ -44,6 +45,9 @@ def _route_intent(state: AgentState) -> str:
         case "off_topic":
             return "off_topic"
 
+        case "call_timing":
+            return "call_timing"
+
         case _:
             return "escalation"
 
@@ -72,6 +76,7 @@ def build_graph() -> StateGraph:
     graph.add_node("lead_capture", lead_capture_node)
     graph.add_node("escalation", escalate)
     graph.add_node("off_topic", off_topic_reply)
+    graph.add_node("call_timing", call_timing_reply)
 
     graph.set_entry_point("supervisor")
 
@@ -84,6 +89,7 @@ def build_graph() -> StateGraph:
             "lead_capture": "lead_capture",
             "escalation": "escalation",
             "off_topic": "off_topic",
+            "call_timing": "call_timing",
         },
     )
 
@@ -100,6 +106,7 @@ def build_graph() -> StateGraph:
     graph.add_edge("info", END)
     graph.add_edge("escalation", END)
     graph.add_edge("off_topic", END)
+    graph.add_edge("call_timing", END)
 
     return graph.compile(checkpointer=memory)
 

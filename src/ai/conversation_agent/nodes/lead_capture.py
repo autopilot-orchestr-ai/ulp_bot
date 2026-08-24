@@ -31,10 +31,10 @@ async def lead_capture_node(state: AgentState) -> dict:
     # 1. FIX LANGUAGE LOCK: Dynamic override if user switches language mid-funnel
     if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or any(w in text_lower for w in ["potřebuju", "chci", "česky", "nerozumím"]):
         lang = "cs"
-    elif re.search(r'[ыъэё]', text_lower) or any(w in text_lower for w in ["пожалуйста", "нужен", "хочу"]):
-        lang = "ru"
-    elif re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "хочу", "будь ласка"]):
+    elif re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "будь ласка"]):
         lang = "uk"
+    elif re.search(r'[ыъэё]', text_lower) or any(w in text_lower for w in ["пожалуйста", "нужен"]):
+        lang = "ru"
 
     msg = MESSAGES.get(lang, MESSAGES["en"])
     history = FormValidator.get_val(state, "conversation_history", [])
@@ -52,24 +52,8 @@ async def lead_capture_node(state: AgentState) -> dict:
             "client_email": None,
         })
 
-    # 3. Profanity Check
-    if await FormValidator.is_profanity_or_hostile(text):
-        profanity_warnings = {
-            "uk": "Будь ласка, дотримуйтесь коректного спілкування у чаті. Введіть дані коректно або задайте ваше питання.",
-            "cs": "Prosím, udržujte v chatu slušnou komunikaci. Zadejte správné údaje nebo položte dotaz.",
-            "en": "Please keep our communication respectful. Enter valid details or ask your question.",
-            "ru": "Пожалуйста, соблюдайте корректное общение в чате. Введите данные корректно или задайте ваш вопрос."
-        }
-        updates.update({
-            "route_to_llm": False,
-            "response": profanity_warnings.get(lang, profanity_warnings["en"])
-        })
-        return updates
-
-    # 4. "WHEN WILL YOU CALL ME?" INTERCEPTOR
-    has_time = any(k in text_lower for k in ["коли", "when", "kdy", "во сколько"])
-    has_call = any(k in text_lower for k in ["зателефону", "call", "zavol", "позвон", "зв'яж", "kontakt"])
-    if has_time and has_call:
+    # 3. "WHEN WILL YOU CALL ME?" INTERCEPTOR
+    if FormValidator.is_asking_call_timing(text):
         updates.update({
             "route_to_llm": False,
             # FIX: Use the new variable name here instead of WORKING_HOURS_MSG
@@ -122,7 +106,12 @@ async def lead_capture_node(state: AgentState) -> dict:
             })
             return updates
 
-        # If a valid service IS found:
+        # If a valid service IS found but pricing hasn't been shown yet, let the FAQ node
+        # handle price + consent first — don't jump straight to collecting personal data.
+        if not FormValidator.has_price_been_shown(history):
+            updates.update({"route_to_llm": True, "current_service": service})
+            return updates
+
         updates["lead_step"] = "awaiting_name"
         updates["current_service"] = service
 
@@ -139,8 +128,13 @@ async def lead_capture_node(state: AgentState) -> dict:
         detected_id = FormValidator.detect_service(text)
         
         if detected_id:
-            # We save the clean ID to the database/CRM state
             updates["current_service"] = detected_id
+
+            if not FormValidator.has_price_been_shown(history):
+                updates["route_to_llm"] = True
+                return updates
+
+            # We save the clean ID to the database/CRM state
             updates["lead_step"] = "awaiting_name"
             
             # Fetch the beautifully translated name for the chat interface!

@@ -12,7 +12,8 @@ class KnowledgeStore:
         # PGVector requires psycopg driver, not asyncpg
         pg_url = db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://")
 
-        self._store = PGVector(
+        # Rename self._store to self.vectorstore
+        self.vectorstore = PGVector(
             embeddings=embeddings,
             collection_name=f"{schema}_{self.COLLECTION_NAME}",
             connection=pg_url,
@@ -25,7 +26,8 @@ class KnowledgeStore:
         docs: list[Document],
         ids: list[str] | None = None
     ) -> None:
-        await self._store.aadd_documents(docs, ids=ids)
+        # Update references here too
+        await self.vectorstore.aadd_documents(docs, ids=ids)
 
     async def search(
         self,
@@ -34,7 +36,8 @@ class KnowledgeStore:
         threshold: float = 0.7,
         filter: dict | None = None
     ) -> list[Document]:
-        results = await self._store.asimilarity_search_with_relevance_scores(
+        # Update references here too
+        results = await self.vectorstore.asimilarity_search_with_relevance_scores(
             query, k=k, filter=filter
         )
         return [doc for doc, score in results if score >= threshold]

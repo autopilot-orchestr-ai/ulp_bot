@@ -24,7 +24,8 @@ async def info_agent(state: AgentState) -> dict:
     log_event("info_agent_start", text=user_message)
 
     # Increased k to 10 so all legal service entries are fetched
-    docs = await knowledge_store.vectorstore.asimilarity_search(user_message, k=10)
+    # Use your custom search method instead
+    docs = await knowledge_store.search(user_message, k=10)
     context = "\n\n".join([doc.page_content for doc in docs])
 
     system_prompt = INFO_SYSTEM_PROMPT.format(context=context)

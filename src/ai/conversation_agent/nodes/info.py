@@ -10,75 +10,34 @@ from src.ai.knowledge.store import KnowledgeStore
 from src.ai.conversation_agent.routes import Route
 from src.ai.knowledge.embeddings import get_embeddings
 
-knowledge_store = KnowledgeStore(settings.db_url, settings.db_schema, get_embeddings(settings.embeddings_model))
+# Properly initialize KnowledgeStore with the Embeddings instance
+knowledge_store = KnowledgeStore(
+    db_url=settings.db_url,
+    schema=settings.db_schema,
+    embeddings=get_embeddings(settings.embeddings_model),
+)
+
 
 async def info_agent(state: AgentState) -> dict:
-    log_event(
-        "info_agent_start",
-        status="start",
-        text=state.incoming.text,
-    )
+    """Handles general information queries using context vector retrieval."""
+    user_message = state.messages[-1].content
+    log_event("info_agent_start", text=user_message)
 
-    lang = (
-        detect_lang(state.incoming.text)
-        or state.language
-        or "en"
-    )
+    # Increased k to 10 so all legal service entries are fetched
+    docs = await knowledge_store.vectorstore.asimilarity_search(user_message, k=10)
+    context = "\n\n".join([doc.page_content for doc in docs])
 
-    llm = get_llm(settings.llm_model)
+    system_prompt = INFO_SYSTEM_PROMPT.format(context=context)
+    llm = get_llm()
 
-    # 1. Search knowledge base
-    documents = await knowledge_store.search(
-        query=state.incoming.text,
-        k=5,
-        threshold=0.7,
-    )
+    messages = [
+        SystemMessage(content=system_prompt),
+        *state.messages,
+    ]
 
-    # 2. Build context
-    context = "\n\n".join(
-        doc.page_content
-        for doc in documents
-    )
-
-    # 3. Conversation history
-    history_messages = []
-
-    for m in state.conversation_history[-8:]:
-        if m["role"] == "user":
-            history_messages.append(
-                HumanMessage(content=m["content"])
-            )
-        else:
-            history_messages.append(
-                AIMessage(content=m["content"])
-            )
-
-    # 4. Prompt
-    system_instruction = f"""
-You are the official assistant of United Legal Partners.
-
-Answer ONLY using the provided knowledge base.
-
-Language: {lang}
-
-Knowledge base:
-{context}
-
-Rules:
-- Do not invent prices.
-- Do not invent services.
-- Do not invent deadlines.
-- If the information is missing, say that the manager should clarify it.
-"""
-
-    response = await llm.ainvoke([
-        SystemMessage(content=system_instruction),
-        *history_messages,
-        HumanMessage(content=state.incoming.text),
-    ])
+    response = await llm.ainvoke(messages)
 
     return {
-        "response": response.content,
-        "retrieved_context": context,
-        "route": Route.END,
+        "messages": [response],
+        "next_route": Route.END,
     }

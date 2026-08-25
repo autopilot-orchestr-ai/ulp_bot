@@ -16,16 +16,34 @@ def is_meaningful_text(text: str) -> bool:
     return len(letters) >= 2
 
 
-def should_redetect_language(text: str, current_lang: str | None = None) -> bool:
-    if not is_meaningful_text(text):
-        return False
+def detect_lang(text: str, default: str = "uk") -> str:
+    """Single, unified language detector for the entire system."""
+    text_lower = text.lower().strip()
+    words = set(re.findall(r'\b\w+\b', text_lower))
+    
+    # Ukrainian
+    if re.search(r'[іїєґ]', text_lower) or words.intersection({"так", "ні", "доброго", "день", "потрібно", "коли", "мене", "підзвоните", "подзвоните", "якій"}):
+        return "uk"
+        
+    # Czech
+    if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or words.intersection({"ano", "ne", "dobrý", "chci", "potřebuju", "právníka", "prosím"}):
+        return "cs"
+        
+    # Russian
+    if re.search(r'[ыъэё]', text_lower) or words.intersection({"да", "нет", "здравствуйте", "нужен", "пожалуйста"}):
+        return "ru"
+        
+    # English keywords or standard Latin text without Czech diacritics
+    en_words = {"good", "day", "hello", "hi", "need", "lawyer", "want", "consultation", "legal", "yes", "no", "when", "will", "call", "me", "a"}
+    if words.intersection(en_words) or (re.match(r'^[a-z0-9\s\?\!\.,\'-]+$', text_lower) and not re.search(r'[ěščřžýáíéóúůďťň]', text_lower)):
+        return "en"
 
-    if current_lang:
-        words = text.strip().split()
-        if len(text) < 15 or len(words) < 3:
-            return False
+    return default
 
-    return True
+def should_redetect_language(text: str, current_lang: str) -> bool:
+    """Determines if the text language obviously conflicts with current_lang."""
+    new_lang = detect_lang(text, default=current_lang)
+    return new_lang != current_lang
 
 
 async def get_client_language_from_history(client_id: str, message: Message) -> str:

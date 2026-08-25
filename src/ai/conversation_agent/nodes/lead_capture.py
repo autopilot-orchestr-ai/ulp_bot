@@ -15,11 +15,11 @@ from src.ai.conversation_agent.agent_rules.strings import (
     WHEN_WILL_YOU_CALL_RESPONSE,
     SERVICE_LOCALIZED_NAMES,
 )
-from src.ai.conversation_agent.agent_rules.lang import get_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 
+# Import the single source of truth for language
+from src.bots.utils.language_detection import detect_lang
 
-# Fields wiped whenever the funnel restarts (form completed, or user cancels).
 _RESET_FIELDS = {
     "lead_step": None,
     "current_service": None,
@@ -40,7 +40,6 @@ _SKIP_EMAIL_WORDS = {"ні", "нет", "no", "ne", "-", "пропустити", 
 
 @dataclass
 class LeadCtx:
-    """Everything a step handler needs, computed once at the top of the node."""
     state: AgentState
     incoming: Any
     text: str
@@ -48,22 +47,7 @@ class LeadCtx:
     msg: dict
     history: list
 
-
-def _detect_lang_override(text_lower: str, default: str) -> str:
-    # Check English first if standard Latin text with English keywords is present
-    if any(w in text_lower for w in ["when", "call", "hello", "need", "please", "want", "how"]):
-        return "en"
-    if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or any(w in text_lower for w in ["potřebuju", "chci", "česky", "nerozumím"]):
-        return "cs"
-    if re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "будь ласка"]):
-        return "uk"
-    if re.search(r'[ыъэё]', text_lower) or any(w in text_lower for w in ["пожалуйста", "нужен"]):
-        return "ru"
-    return default
-
-
 def _service_reprompt(service_id: str, lang: str) -> str:
-    """Confirm the detected service and ask for the client's name."""
     localized = SERVICE_LOCALIZED_NAMES.get(service_id, {}).get(lang, service_id)
     templates = {
         "en": f"Got it, you are interested in **{localized}**!\n\nHow should I address you? Please enter your **Full Name**:",
@@ -73,12 +57,6 @@ def _service_reprompt(service_id: str, lang: str) -> str:
     }
     return templates.get(lang, templates["en"])
 
-
-# ---------------------------------------------------------------------------
-# Shared, step-independent intercepts. Checked in this order before any
-# step-specific logic runs; the first one to return a dict short-circuits.
-# ---------------------------------------------------------------------------
-
 async def _check_call_timing(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
     if not FormValidator.is_asking_call_timing(ctx.text):
         return None
@@ -87,20 +65,14 @@ async def _check_call_timing(ctx: LeadCtx, step: Optional[str]) -> Optional[dict
         "response": WHEN_WILL_YOU_CALL_RESPONSE.get(ctx.lang, WHEN_WILL_YOU_CALL_RESPONSE["en"]),
     }
 
-
 async def _check_question_trap(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
-    """If the user asks a question instead of answering the current form prompt,
-    hand off to the FAQ node rather than forcing them to answer first."""
     if step not in ("awaiting_name", "awaiting_phone", "awaiting_email"):
         return None
-
     text_lower = ctx.text.lower()
     is_q = await FormValidator.is_user_asking_question(ctx.text)
     if not is_q and ("?" in ctx.text or "nerozumím" in text_lower or "не розумію" in text_lower or "не понимаю" in text_lower):
-        is_q = True  # hardcoded safety net in case the LLM check misses an obvious question
-
+        is_q = True 
     return {"route_to_llm": True} if is_q else None
-
 
 async def _check_cancel(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
     if not await FormValidator.is_user_cancelling(ctx.text):
@@ -111,13 +83,7 @@ async def _check_cancel(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
         "response": _CANCEL_MESSAGES.get(ctx.lang, _CANCEL_MESSAGES["uk"]),
     }
 
-
 _INTERCEPTS = (_check_call_timing, _check_question_trap, _check_cancel)
-
-
-# ---------------------------------------------------------------------------
-# One handler per funnel step.
-# ---------------------------------------------------------------------------
 
 async def _step_start(ctx: LeadCtx) -> dict:
     service = FormValidator.extract_service_from_history(ctx.history, current_text=ctx.text)
@@ -129,11 +95,6 @@ async def _step_start(ctx: LeadCtx) -> dict:
             "response": SERVICES_LIST_RESPONSE.get(ctx.lang, SERVICES_LIST_RESPONSE["en"]),
         }
 
-    # Don't jump straight to collecting personal data — let the FAQ node show
-    # pricing and get consent first, per the funnel described in conversation.py.
-    if not FormValidator.has_price_been_shown(ctx.history):
-        return {"route_to_llm": True, "current_service": service}
-
     start_response = ctx.msg.get("start", "")
     if FormValidator.has_weekend_mention(ctx.text):
         start_response = WEEKEND_NOTICES.get(ctx.lang, WEEKEND_NOTICES["en"]) + start_response
@@ -144,24 +105,16 @@ async def _step_start(ctx: LeadCtx) -> dict:
         "response": start_response,
     }
 
-
 async def _step_awaiting_service(ctx: LeadCtx) -> dict:
     detected_id = FormValidator.detect_service(ctx.text)
-
     if not detected_id:
-        # Loop breaker: nothing matched a known service, so let the FAQ node
-        # handle this turn naturally instead of re-asking the list forever.
         return {"route_to_llm": True, "lead_step": None}
-
-    if not FormValidator.has_price_been_shown(ctx.history):
-        return {"route_to_llm": True, "current_service": detected_id}
-
+    
     return {
         "current_service": detected_id,
         "lead_step": "awaiting_name",
         "response": _service_reprompt(detected_id, ctx.lang),
     }
-
 
 async def _step_awaiting_name(ctx: LeadCtx) -> dict:
     detected_srv = FormValidator.detect_service(ctx.text)
@@ -176,7 +129,6 @@ async def _step_awaiting_name(ctx: LeadCtx) -> dict:
         "lead_step": "awaiting_phone",
         "response": ctx.msg["ask_phone"].format(name=ctx.text),
     }
-
 
 async def _step_awaiting_phone(ctx: LeadCtx) -> dict:
     updates: dict = {}
@@ -193,7 +145,6 @@ async def _step_awaiting_phone(ctx: LeadCtx) -> dict:
     updates["lead_step"] = "awaiting_email"
     updates["response"] = ctx.msg["ask_email"]
     return updates
-
 
 async def _step_awaiting_email(ctx: LeadCtx) -> dict:
     updates: dict = {}
@@ -233,7 +184,6 @@ async def _step_awaiting_email(ctx: LeadCtx) -> dict:
     log_event("lead_captured", status="ok", name=client_name, phone=client_phone, email=final_email, service=service)
     return updates
 
-
 _STEP_HANDLERS = {
     None: _step_start,
     "start": _step_start,
@@ -243,7 +193,6 @@ _STEP_HANDLERS = {
     "awaiting_email": _step_awaiting_email,
 }
 
-
 async def lead_capture_node(state: AgentState) -> dict:
     incoming = FormValidator.get_val(state, "incoming")
     text = (FormValidator.get_val(incoming, "text", "") or "").strip()
@@ -251,7 +200,10 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     log_event("lead_capture_start", status="start", step=step)
 
-    lang = _detect_lang_override(text.lower(), default=get_lang(state))
+    # Clean, unified language detection
+    current_state_lang = getattr(state, "language", None) or "uk"
+    lang = detect_lang(text, default=current_state_lang)
+    
     ctx = LeadCtx(
         state=state,
         incoming=incoming,
@@ -261,7 +213,6 @@ async def lead_capture_node(state: AgentState) -> dict:
         history=FormValidator.get_val(state, "conversation_history", []),
     )
 
-    # If the form was already completed, wipe it and treat this as a fresh start.
     reset = {}
     if step == "completed":
         step = None

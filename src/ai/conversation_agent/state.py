@@ -1,12 +1,17 @@
 import uuid
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 from pydantic import BaseModel, Field
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
+
 from src.schemas.ai.messages import IncomingMessage
 from src.ai.conversation_agent.routes import Route
 
 
 class BaseState(BaseModel):
     incoming: IncomingMessage
+    # Added the messages field required by LangGraph/LangChain nodes
+    messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
     conversation_history: list[dict[str, Any]] = Field(default_factory=list)
     response: str = ""
     conversation_id: uuid.UUID | None = None

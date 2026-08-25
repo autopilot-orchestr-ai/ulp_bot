@@ -28,7 +28,11 @@ async def info_agent(state: AgentState) -> dict:
     docs = await knowledge_store.search(user_message, k=10)
     context = "\n\n".join([doc.page_content for doc in docs])
 
-    system_prompt = INFO_SYSTEM_PROMPT.format(context=context)
+    # Assuming your state model has the 'language' field as defined earlier
+    system_prompt = INFO_SYSTEM_PROMPT.format(
+        context=context,
+        lang=state.language # or state["language"] if using TypedDict
+    )
     llm = get_llm()
 
     messages = [

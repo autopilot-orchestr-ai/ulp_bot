@@ -27,17 +27,34 @@ class IntentClassification(BaseModel):
 
 async def classify_intent(state: AgentState) -> dict:
     default_lang = getattr(state, "language", None) or "uk"
+    text_lower = state.incoming.text.lower().strip()
     
     is_in_lead_form = getattr(state, "lead_step", None) is not None or getattr(state, "active_form", None) is not None
 
+    # ==========================================
+    # 1. ROBUST LANGUAGE DETECTION FOR SHORT PHRASES
+    # ==========================================
     if is_in_lead_form:
         lang = default_lang
-    elif should_redetect_language(state.incoming.text, current_lang=default_lang):
-        detected = detect_lang(state.incoming.text)
-        lang = detected if detected else default_lang
     else:
-        lang = default_lang
+        # Fast-check for languages before relying on external detect_lang which fails on short phrases
+        if any(w in text_lower for w in ["when", "call", "hello", "need", "please", "want", "how", "yes", "no"]):
+            lang = "en"
+        elif re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or any(w in text_lower for w in ["potřebuju", "chci", "česky", "ano", "ne"]):
+            lang = "cs"
+        elif re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "так", "ні"]):
+            lang = "uk"
+        elif re.search(r'[ыъэё]', text_lower) or any(w in text_lower for w in ["пожалуйста", "нужен", "да", "нет"]):
+            lang = "ru"
+        elif should_redetect_language(state.incoming.text, current_lang=default_lang):
+            detected = detect_lang(state.incoming.text)
+            lang = detected if detected else default_lang
+        else:
+            lang = default_lang
 
+    # ==========================================
+    # 2. CALL TIMING INTERCEPT
+    # ==========================================
     if FormValidator.is_asking_call_timing(state.incoming.text):
         return {
             "intent": "call_timing",
@@ -47,10 +64,9 @@ async def classify_intent(state: AgentState) -> dict:
         }
 
     # ==========================================
-    # NEW FIX: CATCH "ANO/YES" AND FORCE LEAD INTENT
+    # 3. FIX: CATCH ALL LANGUAGE VARIATIONS OF YES/NO
     # ==========================================
-    text_lower = state.incoming.text.lower().strip()
-    affirmative_words = {"ano", "yes", "так", "да", "chci"}
+    affirmative_words = {"ano", "yes", "так", "да", "chci", "y"}
     
     last_bot_msg = ""
     for m in reversed(state.conversation_history):
@@ -58,9 +74,13 @@ async def classify_intent(state: AgentState) -> dict:
             last_bot_msg = m["content"].lower()
             break
             
-    # If the bot just asked a Yes/No question about contacting a manager:
-    if "(ano / ne)" in last_bot_msg or "kontaktoval" in last_bot_msg:
-        # If the user's response starts with an affirmative word:
+    # Check for ANY language's version of the manager contact question
+    manager_prompts = [
+        "(ano / ne)", "(yes / no)", "(так / ні)", "(да / нет)", 
+        "kontaktoval", "contact", "зв'яжеться", "свяжется"
+    ]
+    
+    if any(prompt in last_bot_msg for prompt in manager_prompts):
         if any(text_lower.startswith(w) for w in affirmative_words) or text_lower == "a":
             log_event("intent_classified", status="forced_lead_intent", reason="user_confirmed_manager")
             return {
@@ -69,8 +89,10 @@ async def classify_intent(state: AgentState) -> dict:
                 "current_service": getattr(state, "current_service", None),
                 "retrieved_context": None,
             }
-    # ==========================================
 
+    # ==========================================
+    # (The rest of your code continues below)
+    # ==========================================
     llm = get_llm(settings.llm_model)
     structured_llm = llm.with_structured_output(IntentClassification)
 

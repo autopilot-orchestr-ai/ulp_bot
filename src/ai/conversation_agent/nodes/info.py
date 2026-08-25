@@ -8,8 +8,9 @@ from src.bots.utils.language_detection import detect_lang
 from src.logger import log_event
 from src.ai.knowledge.store import KnowledgeStore
 from src.ai.conversation_agent.routes import Route
+from src.ai.knowledge.embeddings import get_embeddings
 
-knowledge_store = KnowledgeStore(settings.db_url, settings.db_schema, settings.embeddings_model)
+knowledge_store = KnowledgeStore(settings.db_url, settings.db_schema, get_embeddings(settings.embeddings_model))
 
 async def info_agent(state: AgentState) -> dict:
     log_event(

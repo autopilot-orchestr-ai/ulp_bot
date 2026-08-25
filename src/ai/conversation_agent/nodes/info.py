@@ -33,7 +33,7 @@ async def info_agent(state: AgentState) -> dict:
         context=context,
         lang=state.language # or state["language"] if using TypedDict
     )
-    llm = get_llm()
+    llm = get_llm(settings.llm_model)
 
     messages = [
         SystemMessage(content=system_prompt),

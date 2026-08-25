@@ -1,5 +1,4 @@
 from src.bots.utils.strings import MEDIA_REPLIES
-from src.ai.conversation_agent.agent_rules.lang import detect_lang
 from src.api_client import core_api
 from aiogram.types import Message
 import re

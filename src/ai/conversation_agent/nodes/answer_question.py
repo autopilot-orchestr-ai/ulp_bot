@@ -6,7 +6,7 @@ from src.ai.conversation_agent.prompts.conversation import SYSTEM_PROMPT as FAQ_
 from src.ai.knowledge.store import KnowledgeStore
 from src.ai.knowledge.llm import get_llm
 from src.ai.knowledge.embeddings import get_embeddings
-from src.ai.conversation_agent.agent_rules.lang import detect_lang
+from src.bots.utils.language_detection import detect_lang
 from src.config import settings
 from src.logger import log_event
 

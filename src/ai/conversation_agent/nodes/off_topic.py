@@ -1,6 +1,6 @@
 from src.ai.conversation_agent.state import AgentState
 from src.ai.conversation_agent.prompts.escalation import OFF_TOPIC_MESSAGES
-from src.ai.conversation_agent.agent_rules.lang import detect_lang
+from src.bots.utils.language_detection import detect_lang
 from src.logger import log_event
 
 

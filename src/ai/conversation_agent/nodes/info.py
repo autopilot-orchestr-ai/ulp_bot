@@ -20,7 +20,8 @@ knowledge_store = KnowledgeStore(
 
 async def info_agent(state: AgentState) -> dict:
     """Handles general information queries using context vector retrieval."""
-    user_message = state.messages[-1].content
+    # Change line 23 from state.messages to state["messages"]
+    user_message = state["messages"][-1].content
     log_event("info_agent_start", text=user_message)
 
     # Increased k to 10 so all legal service entries are fetched

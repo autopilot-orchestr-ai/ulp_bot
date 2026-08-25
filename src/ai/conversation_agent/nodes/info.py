@@ -10,7 +10,7 @@ from src.logger import log_event
 async def info_agent(state: AgentState) -> dict:
     log_event("info_agent_start", status="start", text=state.incoming.text)
     
-    lang = detect_lang(state.incoming.text)
+    lang = detect_lang(state.incoming.text) or getattr(state, "language", None) or "en"
     llm = get_llm(settings.llm_model)
 
     history_messages = []

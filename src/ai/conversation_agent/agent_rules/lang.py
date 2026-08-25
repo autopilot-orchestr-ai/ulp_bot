@@ -6,7 +6,10 @@ _UK_SPECIFIC_WORDS = {"наступний", "прийду", "змінити", "�
 _SUPPORTED_LANGS = {"uk", "ru", "en", "cs"}
 
 
-def detect_lang(text: str) -> str:
+def detect_lang(text: str) -> str | None:
+    if not text:
+        return None
+
     text_lower = text.lower()
     tokens = set(text_lower.split())
 
@@ -24,8 +27,10 @@ def detect_lang(text: str) -> str:
         
     if any(c in text_lower for c in _CZECH_CHARS) or (_CZECH_WORDS & tokens):
         return "cs"
-        
-    return "en"
+
+    # No confident signal — return None so the caller can keep the
+    # conversation's already-known language instead of us guessing wrong.
+    return None
 
 
 def get_lang(state: AgentState) -> str:

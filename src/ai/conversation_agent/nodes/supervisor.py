@@ -26,9 +26,6 @@ class IntentClassification(BaseModel):
 
 
 async def classify_intent(state: AgentState) -> dict:
-    llm = get_llm(settings.llm_model)
-    structured_llm = llm.with_structured_output(IntentClassification)
-
     default_lang = getattr(state, "language", None) or "uk"
     
     is_in_lead_form = getattr(state, "lead_step", None) is not None or getattr(state, "active_form", None) is not None
@@ -48,6 +45,9 @@ async def classify_intent(state: AgentState) -> dict:
             "current_service": getattr(state, "current_service", None),
             "retrieved_context": None,
         }
+
+    llm = get_llm(settings.llm_model)
+    structured_llm = llm.with_structured_output(IntentClassification)
 
     history_messages = []
     for m in state.conversation_history[-4:]:

@@ -19,4 +19,7 @@ CRITICAL RULE FOR CONTEXT: Focus strictly on the core intent of the LATEST messa
    - "I'd like to book/order this"
    - Client describes their personal legal case/problem in detail.
    - The user explicitly answers "Yes" (or "Так", "Да", "Ano") to the bot's question about whether they want a manager to contact them to process the request.
+   - NOTE: A plain need-statement like "Потрібен юрист" / "Potřebuju právníka" ("I need a lawyer") on its own is NOT lead_intent — classify it as info_intent unless the user also asks to be contacted or booked.
+
+Also set is_aggressive to true if the message contains hostility, insults, threats, or profanity directed at the bot or staff. This is independent of the intent category above — an aggressive message can still be info_intent, lead_intent, etc. Do not let aggression change your intent classification; just flag it.
 """

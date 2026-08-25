@@ -73,7 +73,7 @@ async def _retrieve_context(query: str, lang: str) -> str:
 async def answer_question(state: ConversationState) -> dict:
     incoming_text = state.incoming.text
 
-    lang = detect_lang(incoming_text)
+    lang = detect_lang(incoming_text) or getattr(state, "language", None) or "en"
 
     context = await _retrieve_context(incoming_text, lang)
 

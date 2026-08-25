@@ -9,7 +9,7 @@ from src.logger import log_event
 from src.ai.knowledge.store import KnowledgeStore
 from src.ai.conversation_agent.routes import Route
 
-knowledge_store = KnowledgeStore()
+knowledge_store = KnowledgeStore(settings.db_url, settings.db_schema, settings.embeddings_model)
 
 async def info_agent(state: AgentState) -> dict:
     log_event(

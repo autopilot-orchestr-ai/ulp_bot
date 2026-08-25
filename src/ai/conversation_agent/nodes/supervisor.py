@@ -11,6 +11,7 @@ from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 from src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
 from src.bots.utils.language_detection import should_redetect_language, detect_lang
 from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
+import re
 
 
 class IntentClassification(BaseModel):

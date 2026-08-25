@@ -8,7 +8,7 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 # from src.ai.conversation_agent.agent_rules.lang import detect_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
-from client.src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
+from src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
 from src.bots.utils.language_detection import should_redetect_language, detect_lang
 from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
 
@@ -45,6 +45,31 @@ async def classify_intent(state: AgentState) -> dict:
             "current_service": getattr(state, "current_service", None),
             "retrieved_context": None,
         }
+
+    # ==========================================
+    # NEW FIX: CATCH "ANO/YES" AND FORCE LEAD INTENT
+    # ==========================================
+    text_lower = state.incoming.text.lower().strip()
+    affirmative_words = {"ano", "yes", "так", "да", "chci"}
+    
+    last_bot_msg = ""
+    for m in reversed(state.conversation_history):
+        if m["role"] == "assistant":
+            last_bot_msg = m["content"].lower()
+            break
+            
+    # If the bot just asked a Yes/No question about contacting a manager:
+    if "(ano / ne)" in last_bot_msg or "kontaktoval" in last_bot_msg:
+        # If the user's response starts with an affirmative word:
+        if any(text_lower.startswith(w) for w in affirmative_words) or text_lower == "a":
+            log_event("intent_classified", status="forced_lead_intent", reason="user_confirmed_manager")
+            return {
+                "intent": "lead_intent",
+                "language": lang,
+                "current_service": getattr(state, "current_service", None),
+                "retrieved_context": None,
+            }
+    # ==========================================
 
     llm = get_llm(settings.llm_model)
     structured_llm = llm.with_structured_output(IntentClassification)

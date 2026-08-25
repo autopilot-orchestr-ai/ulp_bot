@@ -50,8 +50,9 @@ class LeadCtx:
 
 
 def _detect_lang_override(text_lower: str, default: str) -> str:
-    """Mid-funnel language switch: if the user's text clearly signals a different
-    language than the one currently locked in, follow them instead."""
+    # Check English first if standard Latin text with English keywords is present
+    if any(w in text_lower for w in ["when", "call", "hello", "need", "please", "want", "how"]):
+        return "en"
     if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or any(w in text_lower for w in ["potřebuju", "chci", "česky", "nerozumím"]):
         return "cs"
     if re.search(r'[іїєґ]', text_lower) or any(w in text_lower for w in ["потріб", "будь ласка"]):

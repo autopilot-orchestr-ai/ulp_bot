@@ -16,25 +16,32 @@ def is_meaningful_text(text: str) -> bool:
 
 
 def detect_lang(text: str, default: str = "uk") -> str:
-    """Single, unified language detector for the entire system."""
+    """Production-grade, regex-based language detector.
+    Centralized function to prevent mid-funnel language fallback issues."""
+    if not text:
+        return default
+        
     text_lower = text.lower().strip()
     words = set(re.findall(r'\b\w+\b', text_lower))
     
-    # Ukrainian
+    # 🇺🇦 Ukrainian: Specific characters or keywords
     if re.search(r'[іїєґ]', text_lower) or words.intersection({"так", "ні", "доброго", "день", "потрібно", "коли", "мене", "підзвоните", "подзвоните", "якій"}):
         return "uk"
         
-    # Czech
-    if re.search(r'[ěščřžýáíéóúůďťň]', text_lower) or words.intersection({"ano", "ne", "dobrý", "chci", "potřebuju", "právníka", "prosím"}):
+    # 🇨🇿 Czech: Specific characters or keywords
+    if re.search(r'[ěščřžýáíéóúůďťňěščřžýáíéóúůďťňěščřžýáíéóúůďťňěščřžýáíéóúůďťň]', text_lower) or words.intersection({"ano", "ne", "dobrý", "chci", "potřebuju", "právníka", "prosím"}):
         return "cs"
         
-    # Russian
+    # 🇷🇺 Russian: Specific characters or keywords
     if re.search(r'[ыъэё]', text_lower) or words.intersection({"да", "нет", "здравствуйте", "нужен", "пожалуйста"}):
         return "ru"
         
-    # English keywords or standard Latin text without Czech diacritics
-    en_words = {"good", "day", "hello", "hi", "need", "lawyer", "want", "consultation", "legal", "yes", "no", "when", "will", "call", "me", "a"}
-    if words.intersection(en_words) or (re.match(r'^[a-z0-9\s\?\!\.,\'-]+$', text_lower) and not re.search(r'[ěščřžýáíéóúůďťň]', text_lower)):
+    # 🇬🇧 English: Keywords or standard Latin alphabet text without Czech diacritics
+    en_keywords = {"good", "day", "hello", "hi", "need", "lawyer", "want", "consultation", "legal", "yes", "no", "when", "will", "call", "me", "a"}
+    latin_text_pure = re.match(r'^[a-z0-9\s\?\!\.,\'-]+$', text_lower)
+    czech_chars_present = re.search(r'[ěščřžýáíéóúůďťň]', text_lower)
+
+    if words.intersection(en_keywords) or (latin_text_pure and not czech_chars_present):
         return "en"
 
     return default

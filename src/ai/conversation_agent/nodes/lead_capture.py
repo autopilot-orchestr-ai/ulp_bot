@@ -17,7 +17,7 @@ from src.ai.conversation_agent.agent_rules.strings import (
 )
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 
-# Import the single source of truth for language
+# Import centralized language detection
 from src.bots.utils.language_detection import detect_lang
 
 _RESET_FIELDS = {
@@ -40,6 +40,7 @@ _SKIP_EMAIL_WORDS = {"ні", "нет", "no", "ne", "-", "пропустити", 
 
 @dataclass
 class LeadCtx:
+    """Everything a step handler needs, computed once at the top of the node."""
     state: AgentState
     incoming: Any
     text: str
@@ -57,6 +58,8 @@ def _service_reprompt(service_id: str, lang: str) -> str:
     }
     return templates.get(lang, templates["en"])
 
+
+# Step intercepts checked before handler execution
 async def _check_call_timing(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
     if not FormValidator.is_asking_call_timing(ctx.text):
         return None
@@ -85,6 +88,7 @@ async def _check_cancel(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
 
 _INTERCEPTS = (_check_call_timing, _check_question_trap, _check_cancel)
 
+
 async def _step_start(ctx: LeadCtx) -> dict:
     service = FormValidator.extract_service_from_history(ctx.history, current_text=ctx.text)
 
@@ -94,6 +98,10 @@ async def _step_start(ctx: LeadCtx) -> dict:
             "route_to_llm": False,
             "response": SERVICES_LIST_RESPONSE.get(ctx.lang, SERVICES_LIST_RESPONSE["en"]),
         }
+
+    # Gate: Pricing consent funnel
+    if not FormValidator.has_price_been_shown(ctx.history):
+        return {"route_to_llm": True, "current_service": service}
 
     start_response = ctx.msg.get("start", "")
     if FormValidator.has_weekend_mention(ctx.text):
@@ -110,6 +118,9 @@ async def _step_awaiting_service(ctx: LeadCtx) -> dict:
     if not detected_id:
         return {"route_to_llm": True, "lead_step": None}
     
+    if not FormValidator.has_price_been_shown(ctx.history):
+        return {"route_to_llm": True, "current_service": detected_id}
+
     return {
         "current_service": detected_id,
         "lead_step": "awaiting_name",
@@ -200,9 +211,9 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     log_event("lead_capture_start", status="start", step=step)
 
-    # Clean, unified language detection
-    current_state_lang = getattr(state, "language", None) or "uk"
-    lang = detect_lang(text, default=current_state_lang)
+    # Use centralized language detection
+    active_lang = getattr(state, "language", None) or get_lang(state)
+    lang = detect_lang(text, default=active_lang)
     
     ctx = LeadCtx(
         state=state,

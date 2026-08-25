@@ -8,7 +8,9 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 from src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
-from src.bots.utils.language_detection import detect_lang, should_redetect_language
+
+# Import centralized language detection
+from src.bots.utils.language_detection import detect_lang
 from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
 
 class IntentClassification(BaseModel):
@@ -24,16 +26,15 @@ class IntentClassification(BaseModel):
 
 async def classify_intent(state: AgentState) -> dict:
     default_lang = getattr(state, "language", None) or "uk"
-    text_lower = state.incoming.text.lower().strip()
     is_in_lead_form = getattr(state, "lead_step", None) is not None or getattr(state, "active_form", None) is not None
 
-    # 1. UNIFIED LANGUAGE RESOLUTION
+    # Resolve active language
     if is_in_lead_form:
         lang = default_lang
     else:
         lang = detect_lang(state.incoming.text, default=default_lang)
 
-    # 2. CALL TIMING INTERCEPT ("When will you call me?")
+    # Call timing intercept ("When will you call me?")
     if FormValidator.is_asking_call_timing(state.incoming.text):
         return {
             "intent": "call_timing",
@@ -42,7 +43,8 @@ async def classify_intent(state: AgentState) -> dict:
             "retrieved_context": None,
         }
 
-    # 3. YES/ANO/ТАК INTERCEPT (Forces bot to ask for the Name)
+    # YES/ANO/ТАК INTERCEPT 
+    text_lower = state.incoming.text.lower().strip()
     affirmative_words = {"ano", "yes", "так", "да", "chci", "y"}
     last_bot_msg = ""
     for m in reversed(state.conversation_history):
@@ -59,13 +61,13 @@ async def classify_intent(state: AgentState) -> dict:
         if any(text_lower.startswith(w) for w in affirmative_words) or text_lower == "a":
             log_event("intent_classified", status="forced_lead_intent", reason="user_confirmed_manager")
             return {
-                "intent": "lead_intent", # FORCES graph to enter lead_capture_node
+                "intent": "lead_intent", # forces graph to enter lead_capture_node
                 "language": lang,
                 "current_service": getattr(state, "current_service", None),
                 "retrieved_context": None,
             }
 
-    # 4. DEFAULT LLM ROUTING
+    # Default LLM Routing
     llm = get_llm(settings.llm_model)
     structured_llm = llm.with_structured_output(IntentClassification)
 

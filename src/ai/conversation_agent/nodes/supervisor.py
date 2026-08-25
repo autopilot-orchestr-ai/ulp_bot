@@ -8,8 +8,8 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 from src.ai.conversation_agent.agent_rules.lang import detect_lang
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
-from src.ai.conversation_agent.prompts.superviser import SYSTEM_PROMPT
-from src.bots.utils.language_detection import should_redetect_language, detect_lang
+from client.src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
+from src.bots.utils.language_detection import should_redetect_language
 from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
 
 

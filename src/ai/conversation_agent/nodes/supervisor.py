@@ -8,6 +8,7 @@ from src.ai.knowledge.llm import get_llm
 from src.logger import log_event
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 from src.ai.conversation_agent.prompts.supervisor import SYSTEM_PROMPT
+from src.ai.conversation_agent.routes import Route
 
 # Import centralized language detection
 from src.bots.utils.language_detection import detect_lang
@@ -24,9 +25,26 @@ class IntentClassification(BaseModel):
         description="True if the message contains hostility, insults, threats, or profanity."
     )
 
+def map_intent_to_route(intent: str) -> Route:
+    match intent:
+        case "info_intent" | "greeting" | "unknown":
+            return Route.INFO
+
+        case "lead_intent":
+            return Route.LEAD
+
+        case "off_topic":
+            return Route.OFF_TOPIC
+
+        case "call_timing":
+            return Route.CALL_TIMING
+
+        case _:
+            return Route.HUMAN
+
 async def classify_intent(state: AgentState) -> dict:
     default_lang = getattr(state, "language", None) or "uk"
-    is_in_lead_form = getattr(state, "lead_step", None) is not None or getattr(state, "active_form", None) is not None
+    is_in_lead_form = state.lead_step is not None
 
     # Resolve active language
     if is_in_lead_form:
@@ -38,6 +56,7 @@ async def classify_intent(state: AgentState) -> dict:
     if FormValidator.is_asking_call_timing(state.incoming.text):
         return {
             "intent": "call_timing",
+            "route": Route.CALL_TIMING,
             "language": lang,
             "current_service": getattr(state, "current_service", None),
             "retrieved_context": None,
@@ -61,7 +80,8 @@ async def classify_intent(state: AgentState) -> dict:
         if any(text_lower.startswith(w) for w in affirmative_words) or text_lower == "a":
             log_event("intent_classified", status="forced_lead_intent", reason="user_confirmed_manager")
             return {
-                "intent": "lead_intent", # forces graph to enter lead_capture_node
+                "intent": "lead_intent",
+                "route": Route.LEAD,
                 "language": lang,
                 "current_service": getattr(state, "current_service", None),
                 "retrieved_context": None,
@@ -104,6 +124,7 @@ async def classify_intent(state: AgentState) -> dict:
 
         return {
             "intent": result.intent,
+            "route": map_intent_to_route(result.intent),
             "language": lang,
             "current_service": detected_service,
             "retrieved_context": None,

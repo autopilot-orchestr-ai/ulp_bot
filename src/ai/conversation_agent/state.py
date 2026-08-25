@@ -2,6 +2,7 @@ import uuid
 from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 from src.schemas.ai.messages import IncomingMessage
+from src.ai.conversation_agent.routes import Route
 
 
 class BaseState(BaseModel):
@@ -20,8 +21,8 @@ class AgentState(BaseState):
     """Main graph state shared across all nodes."""
     language: Optional[str] = "uk"
     intent: str = ""
+    route: Route = Route.END
     current_service: str | None = None
-    route_to_llm: bool = False
     retrieved_context: str | None = None
 
 

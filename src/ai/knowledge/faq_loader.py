@@ -12,7 +12,6 @@ async def load_faq(faq_path: str, store: KnowledgeStore) -> int:
         return 0
 
     docs = []
-    doc_idx = 0
 
     for lang, items in data.items():
         for item in items:
@@ -26,7 +25,6 @@ async def load_faq(faq_path: str, store: KnowledgeStore) -> int:
                     },
                 )
             )
-            doc_idx += 1
 
     ids = [f"faq_{i}" for i in range(len(docs))]
     await store.add_documents(docs, ids=ids)

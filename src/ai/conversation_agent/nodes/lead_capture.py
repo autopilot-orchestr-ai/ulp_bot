@@ -5,6 +5,7 @@ from typing import Any, Optional
 from src.bots.utils.notify_stuff import notify_manager_lead_telegram
 from src.ai.conversation_agent.state import AgentState
 from src.logger import log_event
+from src.ai.conversation_agent.routes import Route
 
 from src.ai.conversation_agent.agent_rules.strings import (
     MESSAGES,
@@ -38,16 +39,6 @@ _CANCEL_MESSAGES = {
 _SKIP_EMAIL_WORDS = {"ні", "нет", "no", "ne", "-", "пропустити", "пропустить", "немає", "нет емейла"}
 
 
-@dataclass
-class LeadCtx:
-    """Everything a step handler needs, computed once at the top of the node."""
-    state: AgentState
-    incoming: Any
-    text: str
-    lang: str
-    msg: dict
-    history: list
-
 def _service_reprompt(service_id: str, lang: str) -> str:
     localized = SERVICE_LOCALIZED_NAMES.get(service_id, {}).get(lang, service_id)
     templates = {
@@ -60,140 +51,179 @@ def _service_reprompt(service_id: str, lang: str) -> str:
 
 
 # Step intercepts checked before handler execution
-async def _check_call_timing(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
-    if not FormValidator.is_asking_call_timing(ctx.text):
+async def _check_call_timing(state: AgentState, step: Optional[str]) -> Optional[dict]:
+    if not FormValidator.is_asking_call_timing(state.incoming.text):
         return None
     return {
         "route_to_llm": False,
-        "response": WHEN_WILL_YOU_CALL_RESPONSE.get(ctx.lang, WHEN_WILL_YOU_CALL_RESPONSE["en"]),
+        "response": WHEN_WILL_YOU_CALL_RESPONSE.get(state.language, WHEN_WILL_YOU_CALL_RESPONSE["en"]),
     }
 
-async def _check_question_trap(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
+async def _check_question_trap(state: AgentState, step: Optional[str]) -> Optional[dict]:
     if step not in ("awaiting_name", "awaiting_phone", "awaiting_email"):
         return None
-    text_lower = ctx.text.lower()
-    is_q = await FormValidator.is_user_asking_question(ctx.text)
-    if not is_q and ("?" in ctx.text or "nerozumím" in text_lower or "не розумію" in text_lower or "не понимаю" in text_lower):
-        is_q = True 
-    return {"route_to_llm": True} if is_q else None
+    text_lower = state.incoming.text.lower()
+    is_q = await FormValidator.is_user_asking_question(state.incoming.text)
+    if not is_q and ("?" in state.incoming.text or "nerozumím" in text_lower or "не розумію" in text_lower or "не понимаю" in text_lower):
+        is_q = True
+    return {"route": Route.INFO} if is_q else None
 
-async def _check_cancel(ctx: LeadCtx, step: Optional[str]) -> Optional[dict]:
-    if not await FormValidator.is_user_cancelling(ctx.text):
+async def _check_cancel(state: AgentState, step: Optional[str]) -> Optional[dict]:
+    if not await FormValidator.is_user_cancelling(state.incoming.text):
         return None
     return {
         **_RESET_FIELDS,
         "route_to_llm": False,
-        "response": _CANCEL_MESSAGES.get(ctx.lang, _CANCEL_MESSAGES["uk"]),
+        "response": _CANCEL_MESSAGES.get(state.language, _CANCEL_MESSAGES["uk"]),
     }
 
 _INTERCEPTS = (_check_call_timing, _check_question_trap, _check_cancel)
 
 
-async def _step_start(ctx: LeadCtx) -> dict:
-    service = FormValidator.extract_service_from_history(ctx.history, current_text=ctx.text)
+async def _step_start(state: AgentState) -> dict:
+    service = (
+        state.current_service
+        or FormValidator.extract_service_from_history(
+            state.conversation_history,
+            current_text=state.incoming.text,
+        )
+        or FormValidator.detect_service(state.incoming.text)
+    )
 
-    if not service or str(service).strip().lower() in ("", "none"):
+    if not service:
         return {
             "lead_step": "awaiting_service",
             "route_to_llm": False,
-            "response": SERVICES_LIST_RESPONSE.get(ctx.lang, SERVICES_LIST_RESPONSE["en"]),
+            "response": SERVICES_LIST_RESPONSE.get(
+                state.language,
+                SERVICES_LIST_RESPONSE["en"],
+            ),
         }
 
-    # Gate: Pricing consent funnel
-    if not FormValidator.has_price_been_shown(ctx.history):
-        return {"route_to_llm": True, "current_service": service}
-
-    start_response = ctx.msg.get("start", "")
-    if FormValidator.has_weekend_mention(ctx.text):
-        start_response = WEEKEND_NOTICES.get(ctx.lang, WEEKEND_NOTICES["en"]) + start_response
-
     return {
-        "lead_step": "awaiting_name",
         "current_service": service,
-        "response": start_response,
+        "lead_step": "awaiting_name",
+        "route_to_llm": False,
+        "response": _service_reprompt(
+            service,
+            state.language,
+        ),
     }
 
-async def _step_awaiting_service(ctx: LeadCtx) -> dict:
-    detected_id = FormValidator.detect_service(ctx.text)
+async def _step_awaiting_service(state: AgentState) -> dict:
+    detected_id = FormValidator.detect_service(state.incoming.text)
     if not detected_id:
         return {"route_to_llm": True, "lead_step": None}
-    
-    if not FormValidator.has_price_been_shown(ctx.history):
+
+    if not FormValidator.has_price_been_shown(state.conversation_history):
         return {"route_to_llm": True, "current_service": detected_id}
 
     return {
         "current_service": detected_id,
         "lead_step": "awaiting_name",
-        "response": _service_reprompt(detected_id, ctx.lang),
+        "response": _service_reprompt(detected_id, state.language),
     }
 
-async def _step_awaiting_name(ctx: LeadCtx) -> dict:
-    detected_srv = FormValidator.detect_service(ctx.text)
-    if detected_srv:
-        return {"current_service": detected_srv, "response": _service_reprompt(detected_srv, ctx.lang)}
+async def _step_awaiting_name(state: AgentState) -> dict:
+    service = FormValidator.detect_service(state.incoming.text)
 
-    if not await FormValidator.is_valid_name(ctx.text):
-        return {"response": NAME_REPROMPT.get(ctx.lang, NAME_REPROMPT["en"])}
+    if service:
+        return {
+            "current_service": service,
+            "response": _service_reprompt(
+                service,
+                state.language,
+            ),
+        }
 
+    if await FormValidator.is_user_asking_question(
+        state.incoming.text
+    ):
+        return {
+            "route_to_llm": True,
+        }
+
+    name = state.incoming.text.strip()
+
+    if not await FormValidator.is_valid_name(name):
+        return {
+            "route_to_llm": False,
+            "response": NAME_REPROMPT.get(
+                state.language,
+                NAME_REPROMPT["en"],
+            ),
+        }
+
+    msg = MESSAGES.get(state.language, MESSAGES["uk"])
     return {
-        "client_name": ctx.text,
+        "client_name": name,
         "lead_step": "awaiting_phone",
-        "response": ctx.msg["ask_phone"].format(name=ctx.text),
+        "route": Route.LEAD,
+        "response": msg["ask_phone"].format(name=name),
     }
 
-async def _step_awaiting_phone(ctx: LeadCtx) -> dict:
-    updates: dict = {}
-    detected_srv = FormValidator.detect_service(ctx.text)
-    if detected_srv:
-        updates["current_service"] = detected_srv
+async def _step_awaiting_phone(state: AgentState) -> dict:
+    phone = await FormValidator.extract_phone(
+        state.incoming.text
+    )
 
-    phone = await FormValidator.extract_phone(ctx.text)
     if not phone:
-        updates["response"] = PHONE_REPROMPT.get(ctx.lang, PHONE_REPROMPT["en"])
-        return updates
+        return {
+            "route_to_llm": False,
+            "response": PHONE_REPROMPT.get(
+                state.language,
+                PHONE_REPROMPT["en"],
+            ),
+        }
 
-    updates["client_phone"] = phone
-    updates["lead_step"] = "awaiting_email"
-    updates["response"] = ctx.msg["ask_email"]
-    return updates
+    msg = MESSAGES.get(state.language, MESSAGES["uk"])
+    return {
+        "client_phone": phone,
+        "lead_step": "awaiting_email",
+        "route": Route.LEAD,
+        "response": msg["ask_email"],
+    }
 
-async def _step_awaiting_email(ctx: LeadCtx) -> dict:
-    updates: dict = {}
-    detected_srv = FormValidator.detect_service(ctx.text)
-    if detected_srv:
-        updates["current_service"] = detected_srv
+async def _step_awaiting_email(state: AgentState) -> dict:
+    text = state.incoming.text.strip()
+    email = await FormValidator.extract_email(text)
 
-    email = await FormValidator.extract_email(ctx.text)
-    is_skip = ctx.text.lower() in _SKIP_EMAIL_WORDS
+    is_skip = text.lower() in _SKIP_EMAIL_WORDS
 
     if not email and not is_skip:
-        updates["response"] = ctx.msg["ask_email"]
-        return updates
+        return {
+            "route_to_llm": False,
+            "response": state.msg["ask_email"],
+        }
 
-    final_email = email or "Not specified"
-    updates["client_email"] = final_email
-    updates["lead_step"] = "completed"
-    updates["response"] = ctx.msg["completed"]
+    final_email = email or None
 
-    client_name = FormValidator.get_val(ctx.state, "client_name", "Not specified")
-    client_phone = FormValidator.get_val(ctx.state, "client_phone", "Not specified")
+    client_name = state.client_name or "Not specified"
+    client_phone = state.client_phone or "Not specified"
     service = (
-        updates.get("current_service")
-        or FormValidator.get_val(ctx.state, "current_service")
-        or FormValidator.extract_service_from_history(ctx.history)
+        state.current_service
+        or FormValidator.extract_service_from_history(
+            state.conversation_history
+        )
+        or "Not specified"
     )
-    user = FormValidator.get_val(ctx.incoming, "user")
 
     await notify_manager_lead_telegram(
         client_name=client_name,
         client_phone=client_phone,
-        client_email=final_email,
+        client_email=final_email or "Not specified",
         service=service,
-        user=user,
-        lang=ctx.lang,
+        user=state.incoming.user,
+        lang=state.language,
     )
-    log_event("lead_captured", status="ok", name=client_name, phone=client_phone, email=final_email, service=service)
-    return updates
+
+    msg = MESSAGES.get(state.language, MESSAGES["uk"])
+    return {
+        "client_email": final_email,
+        "lead_step": "completed",
+        "route": Route.END,
+        "response": msg["completed"],
+    }
 
 _STEP_HANDLERS = {
     None: _step_start,
@@ -205,37 +235,40 @@ _STEP_HANDLERS = {
 }
 
 async def lead_capture_node(state: AgentState) -> dict:
-    incoming = FormValidator.get_val(state, "incoming")
-    text = (FormValidator.get_val(incoming, "text", "") or "").strip()
-    step = FormValidator.get_val(state, "lead_step")
+    text = (state.incoming.text or "").strip()
+    step = state.lead_step
 
-    log_event("lead_capture_start", status="start", step=step)
+    log_event("lead_capture_start", status="start", step=step, text=text)
 
-    # Use centralized language detection
-    active_lang = getattr(state, "language", None) or get_lang(state)
+    active_lang = state.language or "uk"
     lang = detect_lang(text, default=active_lang)
+    state.language = lang
     
-    ctx = LeadCtx(
-        state=state,
-        incoming=incoming,
-        text=text,
-        lang=lang,
-        msg=MESSAGES.get(lang, MESSAGES["en"]),
-        history=FormValidator.get_val(state, "conversation_history", []),
-    )
+    # Дістаємо словник повідомлень для мови
+    msg = MESSAGES.get(lang, MESSAGES["uk"])
 
-    reset = {}
     if step == "completed":
         step = None
-        reset = dict(_RESET_FIELDS)
 
     for check in _INTERCEPTS:
-        result = await check(ctx, step)
+        result = await check(state, step)
         if result is not None:
-            return {**reset, **result}
+            # Якщо потрібно передати питання в LLM (info agent)
+            if result.get("route_to_llm"):
+                result["route"] = Route.INFO
+            log_event("lead_capture_intercept", status="ok", step=step)
+            return result
 
     handler = _STEP_HANDLERS.get(step, _step_start)
-    result = await handler(ctx)
+    result = await handler(state)
+
+    # Якщо хендлер каже передати управління в LLM
+    if result.get("route_to_llm"):
+        result["route"] = Route.INFO
+    elif result.get("lead_step") == "completed":
+        result["route"] = Route.END
+    else:
+        result["route"] = Route.LEAD
 
     log_event("lead_capture_finished", status="ok", next_step=result.get("lead_step", step))
-    return {**reset, **result}
+    return result

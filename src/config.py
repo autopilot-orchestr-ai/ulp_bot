@@ -27,6 +27,8 @@ class Settings(BaseSettings):
 
     # Knowledge base
     faq_path: str
+    # Company info (single source of truth for the chat node)
+    company_info_path: str = "src/assets/company_info.md"
     website_url: str
 
     # RAG tuning

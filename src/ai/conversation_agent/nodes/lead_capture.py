@@ -66,7 +66,7 @@ async def _check_question_trap(state: AgentState, step: Optional[str]) -> Option
     is_q = await FormValidator.is_user_asking_question(state.incoming.text)
     if not is_q and ("?" in state.incoming.text or "nerozumím" in text_lower or "не розумію" in text_lower or "не понимаю" in text_lower):
         is_q = True
-    return {"route": Route.INFO} if is_q else None
+    return {"route": Route.CHAT} if is_q else None
 
 async def _check_cancel(state: AgentState, step: Optional[str]) -> Optional[dict]:
     if not await FormValidator.is_user_cancelling(state.incoming.text):
@@ -255,7 +255,7 @@ async def lead_capture_node(state: AgentState) -> dict:
         if result is not None:
             # Якщо потрібно передати питання в LLM (info agent)
             if result.get("route_to_llm"):
-                result["route"] = Route.INFO
+                result["route"] = Route.CHAT
             log_event("lead_capture_intercept", status="ok", step=step)
             return result
 
@@ -264,7 +264,7 @@ async def lead_capture_node(state: AgentState) -> dict:
 
     # Якщо хендлер каже передати управління в LLM
     if result.get("route_to_llm"):
-        result["route"] = Route.INFO
+        result["route"] = Route.CHAT
     elif result.get("lead_step") == "completed":
         result["route"] = Route.END
     else:

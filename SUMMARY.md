@@ -4,6 +4,30 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 22:00:10 +0200 — `f329040`
+**Fix `**bold**` markdown not rendering — showed as literal asterisks in the chat**
+
+Every response string (`MESSAGES`, `*_REPROMPT`, `company_info.md`, and what the `chat` LLM
+naturally produces) writes `**bold**` — CommonMark-style, double asterisk. But
+`message.py`'s `handle_text_message` sent every AI conversation reply with no `parse_mode` at
+all, so Telegram displayed the raw text unrendered, asterisks and all. User noticed and asked
+why replies didn't read like a normal LLM chat.
+
+The obvious fix (`parse_mode="Markdown"`) would still have been wrong: Telegram's own
+Markdown/MarkdownV2 modes use single `*bold*`, not `**bold**` — verified against aiogram's own
+markdown helper before shipping anything. MarkdownV2 also requires escaping most punctuation in
+every message or Telegram rejects it outright, too risky for unpredictable LLM output.
+
+Fix: bot-level default `parse_mode=HTML` (matching the convention already used elsewhere —
+media replies, staff notifications), plus a small converter applied at the one send call for AI
+conversation replies: escapes `<`, `>`, `&`, then turns `**bold**` into real `<b>bold</b>` tags.
+
+Found but not yet fixed: `/help`'s static text has the identical `**bold**` bug (plus
+`_italic_`, which happens to render correctly under its own explicit `parse_mode="Markdown"`) —
+lower-traffic than the main conversation flow, flagged for the user to decide on separately.
+
+---
+
 ## 2026-08-26 18:12:31 +0200 — `de6c2e1`
 **Fix two crashes in lead_capture that silently dropped completed leads**
 

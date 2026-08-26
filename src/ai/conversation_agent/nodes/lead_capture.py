@@ -16,8 +16,12 @@ from src.ai.conversation_agent.agent_rules.strings import (
     SERVICES_LIST_RESPONSE,
     WHEN_WILL_YOU_CALL_RESPONSE,
     SERVICE_LOCALIZED_NAMES,
+    CONSULTATION_TYPE_PROMPT,
+    CONTACT_CONFIRMATION_PROMPT,
+    CONTACT_DECLINED_MESSAGE,
 )
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
+from src.ai.conversation_agent.agent_rules.affirmation import is_affirmative, is_negative
 
 # Import centralized language detection
 from src.bots.utils.language_detection import detect_lang
@@ -61,7 +65,10 @@ async def _check_call_timing(state: AgentState, step: Optional[str]) -> Optional
     }
 
 async def _check_question_trap(state: AgentState, step: Optional[str]) -> Optional[dict]:
-    if step not in ("awaiting_name", "awaiting_phone", "awaiting_email"):
+    if step not in (
+        "awaiting_name", "awaiting_phone", "awaiting_email",
+        "awaiting_consultation_type", "awaiting_contact_confirmation",
+    ):
         return None
     text_lower = state.incoming.text.lower()
     is_q = await FormValidator.is_user_asking_question(state.incoming.text)
@@ -101,13 +108,26 @@ async def _step_start(state: AgentState) -> dict:
             ),
         }
 
+    if service == "consultation_ambiguous":
+        return {
+            "lead_step": "awaiting_consultation_type",
+            "route_to_llm": False,
+            "response": CONSULTATION_TYPE_PROMPT.get(
+                state.language,
+                CONSULTATION_TYPE_PROMPT["en"],
+            ),
+        }
+
+    if not FormValidator.has_price_been_shown(state.conversation_history):
+        return {"route_to_llm": True, "current_service": service}
+
     return {
         "current_service": service,
-        "lead_step": "awaiting_name",
+        "lead_step": "awaiting_contact_confirmation",
         "route_to_llm": False,
-        "response": _service_reprompt(
-            service,
+        "response": CONTACT_CONFIRMATION_PROMPT.get(
             state.language,
+            CONTACT_CONFIRMATION_PROMPT["en"],
         ),
     }
 
@@ -116,13 +136,83 @@ async def _step_awaiting_service(state: AgentState) -> dict:
     if not detected_id:
         return {"route_to_llm": True, "lead_step": None}
 
+    if detected_id == "consultation_ambiguous":
+        return {
+            "lead_step": "awaiting_consultation_type",
+            "response": CONSULTATION_TYPE_PROMPT.get(
+                state.language,
+                CONSULTATION_TYPE_PROMPT["en"],
+            ),
+        }
+
     if not FormValidator.has_price_been_shown(state.conversation_history):
         return {"route_to_llm": True, "current_service": detected_id}
 
     return {
         "current_service": detected_id,
-        "lead_step": "awaiting_name",
-        "response": _service_reprompt(detected_id, state.language),
+        "lead_step": "awaiting_contact_confirmation",
+        "response": CONTACT_CONFIRMATION_PROMPT.get(
+            state.language,
+            CONTACT_CONFIRMATION_PROMPT["en"],
+        ),
+    }
+
+async def _step_awaiting_consultation_type(state: AgentState) -> dict:
+    detected_id = FormValidator.detect_service(state.incoming.text)
+
+    if detected_id in ("legal_consultation", "visa_consultation"):
+        if not FormValidator.has_price_been_shown(state.conversation_history):
+            return {"route_to_llm": True, "current_service": detected_id}
+        return {
+            "current_service": detected_id,
+            "lead_step": "awaiting_contact_confirmation",
+            "response": CONTACT_CONFIRMATION_PROMPT.get(
+                state.language,
+                CONTACT_CONFIRMATION_PROMPT["en"],
+            ),
+        }
+
+    if await FormValidator.is_user_asking_question(state.incoming.text):
+        return {"route_to_llm": True}
+
+    # Still ambiguous or unrelated - reprompt the same question, step unchanged.
+    return {
+        "response": CONSULTATION_TYPE_PROMPT.get(
+            state.language,
+            CONSULTATION_TYPE_PROMPT["en"],
+        ),
+    }
+
+
+async def _step_awaiting_contact_confirmation(state: AgentState) -> dict:
+    text = state.incoming.text.strip()
+
+    if is_affirmative(text):
+        msg = MESSAGES.get(state.language, MESSAGES["uk"])
+        return {
+            "lead_step": "awaiting_name",
+            "route": Route.LEAD,
+            "response": msg["start"],
+        }
+
+    if is_negative(text):
+        return {
+            **_RESET_FIELDS,
+            "response": CONTACT_DECLINED_MESSAGE.get(
+                state.language,
+                CONTACT_DECLINED_MESSAGE["en"],
+            ),
+        }
+
+    if await FormValidator.is_user_asking_question(text):
+        return {"route_to_llm": True}
+
+    # Neither yes, no, nor a question - reprompt the same gate, step unchanged.
+    return {
+        "response": CONTACT_CONFIRMATION_PROMPT.get(
+            state.language,
+            CONTACT_CONFIRMATION_PROMPT["en"],
+        ),
     }
 
 async def _step_awaiting_name(state: AgentState) -> dict:
@@ -236,6 +326,8 @@ _STEP_HANDLERS = {
     None: _step_start,
     "start": _step_start,
     "awaiting_service": _step_awaiting_service,
+    "awaiting_consultation_type": _step_awaiting_consultation_type,
+    "awaiting_contact_confirmation": _step_awaiting_contact_confirmation,
     "awaiting_name": _step_awaiting_name,
     "awaiting_phone": _step_awaiting_phone,
     "awaiting_email": _step_awaiting_email,

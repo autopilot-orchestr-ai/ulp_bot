@@ -19,7 +19,7 @@ class BaseState(BaseModel):
     client_name: str | None = None
     client_phone: str | None = None
     client_email: str | None = None
-    lead_step: Literal["awaiting_service", "awaiting_name", "awaiting_phone", "awaiting_email", "completed"] | None = None
+    lead_step: Literal["awaiting_service", "awaiting_consultation_type", "awaiting_contact_confirmation", "awaiting_name", "awaiting_phone", "awaiting_email", "completed"] | None = None
 
 
 class AgentState(BaseState):

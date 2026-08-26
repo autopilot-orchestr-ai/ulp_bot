@@ -36,7 +36,7 @@ SERVICE_PATTERNS = {
     # ⚖️ Legal consultations - distinct from visa/migration below (used to
     # be one conflated "consultation" bucket; a client reported the bot
     # never asking which type was meant).
-    r'юрист|právník|pravnik|advokát|advokat|lawyer|адвокат|legal\s?consult|právní\s?konzult': "legal_consultation",
+    r'юрист|юридич|юридическ|právník|pravnik|advokát|advokat|lawyer|адвокат|právní|\blegal\b': "legal_consultation",
     # 🛂 Visa / migration consultations.
     r'віз|виз|víz|viz|visa|мігра|миграц|migra|migrant': "visa_consultation",
     # A bare "consultation" with neither legal nor visa qualifier - genuinely

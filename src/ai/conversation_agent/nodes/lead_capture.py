@@ -12,6 +12,7 @@ from src.ai.conversation_agent.agent_rules.strings import (
     WEEKEND_NOTICES,
     PHONE_REPROMPT,
     NAME_REPROMPT,
+    EMAIL_REPROMPT,
     SERVICES_LIST_RESPONSE,
     WHEN_WILL_YOU_CALL_RESPONSE,
     SERVICE_LOCALIZED_NAMES,
@@ -193,7 +194,7 @@ async def _step_awaiting_email(state: AgentState) -> dict:
     if not email and not is_skip:
         return {
             "route_to_llm": False,
-            "response": state.msg["ask_email"],
+            "response": EMAIL_REPROMPT.get(state.language, EMAIL_REPROMPT["en"]),
         }
 
     final_email = email or None
@@ -213,7 +214,13 @@ async def _step_awaiting_email(state: AgentState) -> dict:
         client_phone=client_phone,
         client_email=final_email or "Not specified",
         service=service,
-        user=state.incoming.user,
+        # IncomingMessage has no `user` field (it's a channel-agnostic
+        # schema) - direct attribute access here crashed for every
+        # successfully completed lead, silently preventing the manager
+        # notification below from ever running. getattr with a default
+        # matches the same defensive pattern the old escalation.py already
+        # used for this identical call.
+        user=getattr(state.incoming, "user", None),
         lang=state.language,
     )
 

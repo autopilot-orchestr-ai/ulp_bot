@@ -1,6 +1,7 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from src.ai.conversation_agent.nodes import gate as gate_module
 from src.ai.conversation_agent.nodes.gate import (
     classify_lead_intent,
     is_affirmative_reply_to_manager_prompt,
@@ -60,33 +61,25 @@ async def test_classify_lead_intent_skips_llm_when_form_active():
     assert result["route"] == Route.LEAD
 
 
-async def test_classify_lead_intent_flags_profanity_mid_form_via_regex_no_llm():
+async def test_classify_lead_intent_detects_profanity_mid_form_via_regex_no_llm_no_notify():
     # "сука" matches PROFANITY_PATTERNS directly (confirmed against
-    # src/ai/conversation_agent/agent_rules/strings.py:86-91); "ти тупий
-    # бот" (masc. "тупий") does NOT match the \bтуп[аоыіеє]+[ая]?\b pattern,
-    # which only covers "и" via the Ukrainian/Russian vowel class it lists.
+    # src/ai/conversation_agent/agent_rules/strings.py:86-91). Per user
+    # policy (2026-08-26), hostility alone no longer pings the manager on
+    # Telegram - only logged. Regression guard: no notify_stuff import
+    # should exist in gate.py to call in the first place.
     state = _state("ти сука, чому мовчиш?", lead_step="awaiting_name")
-    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm, \
-         patch(
-             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
-             new_callable=AsyncMock,
-         ) as notify:
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm:
         result = await classify_lead_intent(state)
     get_llm.assert_not_called()
-    notify.assert_awaited_once()
     assert result["route"] == Route.LEAD
+    assert not hasattr(gate_module, "notify_manager_aggressive_telegram")
 
 
-async def test_classify_lead_intent_mid_form_no_profanity_no_notify():
+async def test_classify_lead_intent_mid_form_no_profanity():
     state = _state("Іван Петренко", lead_step="awaiting_name")
-    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm, \
-         patch(
-             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
-             new_callable=AsyncMock,
-         ) as notify:
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm:
         result = await classify_lead_intent(state)
     get_llm.assert_not_called()
-    notify.assert_not_awaited()
     assert result["route"] == Route.LEAD
 
 
@@ -118,7 +111,11 @@ async def test_classify_lead_intent_routes_to_lead_when_llm_says_yes():
     assert result["intent"] == "lead"
 
 
-async def test_classify_lead_intent_notifies_on_aggressive_message():
+async def test_classify_lead_intent_does_not_notify_manager_for_aggression_alone():
+    """Per user policy (2026-08-26): the manager is only ever notified on
+    Telegram for an explicit human request or a completed lead with contact
+    details, never for hostility alone - regression guard: gate.py must not
+    even import a notify function to call for this case."""
     state = _state("ти тупий бот")
     fake_structured = MagicMock()
     fake_structured.ainvoke = AsyncMock(
@@ -126,28 +123,7 @@ async def test_classify_lead_intent_notifies_on_aggressive_message():
     )
     fake_llm = MagicMock()
     fake_llm.with_structured_output.return_value = fake_structured
-    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm), \
-         patch(
-             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
-             new_callable=AsyncMock,
-         ) as notify:
-        await classify_lead_intent(state)
-    notify.assert_awaited_once()
-
-
-async def test_classify_lead_intent_survives_notify_failure():
-    state = _state("ти тупий бот")
-    fake_structured = MagicMock()
-    fake_structured.ainvoke = AsyncMock(
-        return_value=LeadGateClassification(wants_lead=False, is_aggressive=True)
-    )
-    fake_llm = MagicMock()
-    fake_llm.with_structured_output.return_value = fake_structured
-    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm), \
-         patch(
-             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
-             new_callable=AsyncMock,
-             side_effect=RuntimeError("telegram down"),
-         ):
-        result = await classify_lead_intent(state)  # must not raise
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm):
+        result = await classify_lead_intent(state)
     assert result["route"] == Route.CHAT
+    assert not hasattr(gate_module, "notify_manager_aggressive_telegram")

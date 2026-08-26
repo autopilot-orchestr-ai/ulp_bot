@@ -75,7 +75,9 @@ nodes:
 
 - **`gate`** (`nodes/gate.py`, `classify_lead_intent`) — the entry node. A binary classifier, not a 5-way
   one: it decides only `wants_lead` (clear commitment to proceed, or an explicit request for a human) via
-  one LLM structured-output call, plus the same aggressive-message flagging the old supervisor had. Two
+  one LLM structured-output call. Also flags `is_aggressive` (hostile/profane messages) for logging only —
+  per user policy (2026-08-26), the manager is only ever notified on Telegram for an explicit human request
+  or a completed lead with contact details, never for hostility alone; see "Staff notifications" below. Two
   cheap intercepts run first: if a lead-capture form is already active (`lead_step` set, not `"completed"`),
   the LLM call is skipped entirely (`routing.py::route_after_gate` sends the turn straight to `lead_capture`
   regardless of what `gate` returns); a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply
@@ -117,11 +119,13 @@ message, add it to all four languages there rather than inlining a new string in
 
 ### Staff notifications
 
-`src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts (new lead, media received, aggressive
-message, contacts shown) directly via the aiogram `bot` instance, imported lazily inside each function to avoid
-a circular import with `src/bots/tgbot/bot.py`. None of the four functions guard their own `bot.send_message`
-call with a try/except — whether a failure is swallowed depends entirely on the call site. The aggressive-
-message alert is guarded (`nodes/gate.py` wraps it in `try/except Exception: pass`). The lead-capture
-completion alert (`nodes/lead_capture.py`, `notify_manager_lead_telegram`) is **not** guarded and runs before
-the "thank you" response is built — if that Telegram send fails, the client who just finished the form gets
-no confirmation message at all, not even a generic error.
+`src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts directly via the aiogram `bot` instance,
+imported lazily inside each function to avoid a circular import with `src/bots/tgbot/bot.py`. Two functions
+are actually wired up: `notify_manager_lead_telegram` (called from `nodes/lead_capture.py`'s completion step —
+an explicit human request or a completed lead with contact details) and `notify_manager_media_telegram`
+(called from `bots/tgbot/handlers/message.py` on any non-text message). Per user policy (2026-08-26), hostile
+messages are logged (`gate.py`'s `is_aggressive`) but no longer ping the manager — `notify_manager_aggressive_telegram`
+still exists in this file but nothing calls it anymore. `notify_manager_contacts_telegram` has never had a
+caller (pre-existing, unrelated to that change). `notify_manager_lead_telegram`'s call in `lead_capture.py` is
+**not** try/except-guarded and runs before the "thank you" response is built — if that Telegram send fails,
+the client who just finished the form gets no confirmation message at all, not even a generic error.

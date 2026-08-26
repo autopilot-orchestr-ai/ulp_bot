@@ -9,7 +9,6 @@ from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.state import AgentState
 from src.ai.llm import get_llm
 from src.bots.utils.language_detection import detect_lang
-from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
 from src.config import settings
 from src.logger import log_event
 
@@ -60,21 +59,13 @@ async def classify_lead_intent(state: AgentState) -> dict:
     if state.lead_step is not None and state.lead_step != "completed":
         # route_after_gate overrides whatever we return here when a form is
         # active, so skip the LLM classification call entirely (it would be
-        # discarded). Still run a cheap regex-only profanity check so staff
-        # don't lose visibility into hostile messages sent mid-form - the
-        # pre-refactor supervisor.py always ran a full LLM check here.
+        # discarded). Still run a cheap regex-only profanity check purely for
+        # log visibility - staff are only ever pinged on Telegram for the two
+        # cases the user set as policy (explicit human request, or a
+        # completed lead with contact details), not for hostility alone.
         log_event("gate_classified", status="skipped_mid_form", lead_step=state.lead_step, language=default_lang)
         if any(re.search(pattern, state.incoming.text) for pattern in PROFANITY_PATTERNS):
             log_event("aggressive_message_flagged", status="ok", text=state.incoming.text, source="regex_mid_form")
-            try:
-                await notify_manager_aggressive_telegram(
-                    client_id=state.incoming.client_id,
-                    client_name=state.incoming.client_name,
-                    text=state.incoming.text,
-                    lang=default_lang,
-                )
-            except Exception:
-                pass
         return {"intent": "lead", "route": Route.LEAD, "language": default_lang}
 
     lang = detect_lang(state.incoming.text, default=default_lang)
@@ -110,17 +101,12 @@ async def classify_lead_intent(state: AgentState) -> dict:
         language=lang,
     )
 
+    # Logged for visibility, but not sent to staff on Telegram: per user
+    # policy (2026-08-26), the manager is only ever notified for an explicit
+    # human request or a completed lead with contact details - not for
+    # hostility alone.
     if result.is_aggressive:
         log_event("aggressive_message_flagged", status="ok", text=state.incoming.text)
-        try:
-            await notify_manager_aggressive_telegram(
-                client_id=state.incoming.client_id,
-                client_name=state.incoming.client_name,
-                text=state.incoming.text,
-                lang=lang,
-            )
-        except Exception:
-            pass
 
     return {
         "intent": "lead" if result.wants_lead else "chat",

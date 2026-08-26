@@ -82,23 +82,29 @@ nodes:
   the LLM call is skipped entirely (`routing.py::route_after_gate` sends the turn straight to `lead_capture`
   regardless of what `gate` returns); a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply
   immediately after the bot itself asked "want us to contact you?", without a model call.
-- **`lead_capture`** (`nodes/lead_capture.py`) — unchanged: a manually-coded multi-step form (service → name
-  → phone → email) driven by `state.lead_step`, with regex+LLM field validation in `agent_rules/form_validator.py`.
-  On completion it notifies staff via Telegram. It can hand off mid-form to `chat` (`Route.CHAT`) when the
-  user asks a question instead of answering, or end the turn (`Route.END`) after a reprompt or a completed
-  step — see `routing.py::route_after_lead_capture`'s docstring for why `Route.LEAD` must map to `END` here
+- **`lead_capture`** (`nodes/lead_capture.py`) — unchanged in spirit, but the pre-name-collection
+  sequence was redesigned 2026-08-27 after real client feedback: a detected service now goes through
+  `awaiting_consultation_type` (only for an ambiguous bare "consultation" — disambiguates legal vs.
+  visa/migration) and `awaiting_contact_confirmation` (a universal yes/no gate, entered once pricing
+  has been shown via `FormValidator.has_price_been_shown`) before ever reaching `awaiting_name`. A "no"
+  at the confirmation gate resets the form without collecting any personal data. On completion it
+  notifies staff via Telegram. It can hand off mid-form to `chat` (`Route.CHAT`) when the user asks a
+  question instead of answering, or end the turn (`Route.END`) after a reprompt or a completed step —
+  see `routing.py::route_after_lead_capture`'s docstring for why `Route.LEAD` must map to `END` here
   and not back into `lead_capture` itself (a same-turn self-loop that used to hit `GraphRecursionError`,
   fixed 2026-08-26).
 - **`chat`** (`nodes/chat.py`, `chat_node`) — everything else: FAQ answering, identity questions, off-topic
-  redirects, and handoff-for-unanswerable-questions, all in one LLM node. It reads `src/assets/company_info.md`
-  fresh from disk on every call and injects the whole file into the system prompt — this is the single source
-  of truth for services, pricing, required documents, contact/office/hours, and FAQ, in all four languages;
-  edit that file and the very next message reflects the change, no reload or restart. Bound to one tool,
-  `log_unanswered_question` (`tools/chat_tools.py`, wraps `core_api.store_unanswered_question` against the
-  *real* `conversation_id` — the old `escalation.py` this replaced stubbed a throwaway `uuid4()` here and
-  silently orphaned every logged question). Calling it short-circuits straight to a canned
-  `HANDOFF_MESSAGES[lang]` reply (`prompts/handoff.py`) instead of letting the model free-generate what gets
-  promised to a client.
+  redirects, and handoff-for-unanswerable-questions, all in one LLM node. Also fast-paths the exact-wording
+  'when will you call me?' response (with a weekend-mention special case) before any LLM call — this used
+  to only be guaranteed inside an active lead form; reinstated everywhere 2026-08-27. It reads
+  `src/assets/company_info.md` fresh from disk on every call and injects the whole file into the system
+  prompt — this is the single source of truth for services, pricing, required documents, contact/office/hours,
+  and FAQ, in all four languages; edit that file and the very next message reflects the change, no reload or
+  restart. Bound to one tool, `log_unanswered_question` (`tools/chat_tools.py`, wraps
+  `core_api.store_unanswered_question` against the *real* `conversation_id` — the old `escalation.py` this
+  replaced stubbed a throwaway `uuid4()` here and silently orphaned every logged question). Calling it
+  short-circuits straight to a canned `HANDOFF_MESSAGES[lang]` reply (`prompts/handoff.py`) instead of
+  letting the model free-generate what gets promised to a client.
 
 Graph wiring (`graph.py` + `routing.py`): `gate` is the entry point and conditionally routes to `lead_capture`
 or `chat`. `lead_capture` can hand back to `chat` or end the turn. `chat` always ends the turn.

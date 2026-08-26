@@ -112,7 +112,7 @@ async def test_chat_call_timing_fast_path_prepends_weekend_notice(tmp_path):
     ) as mock_settings:
         mock_settings.company_info_path = str(info_file)
         mock_settings.llm_model = "gpt-4o-mini"
-        result = await chat_node(_state("зателефонуйте мені в суботу", language="uk"))
+        result = await chat_node(_state("коли ви зателефонуєте мені в суботу?", language="uk"))
     assert "вихідн" in result["response"].lower()
     assert "8:00" in result["response"]
 

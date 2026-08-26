@@ -67,3 +67,18 @@ async def test_lead_capture_can_hand_off_to_chat_mid_form():
         chat_return={"response": "8 to 5, Mon-Fri"},
     )
     assert result["response"] == "8 to 5, Mon-Fri"
+
+
+async def test_lead_capture_route_lead_terminates_the_turn_not_loops():
+    """Regression test for the GraphRecursionError bug fixed 2026-08-26:
+    lead_capture returning Route.LEAD (the default outcome for a reprompt or
+    a step advance) must end the turn, not re-invoke lead_capture again in
+    the same graph run. Reverting graph.py's Route.LEAD.value target back to
+    "lead_capture" must make this test fail."""
+    result = await _invoke_with_stubs(
+        "t5",
+        {"incoming": _incoming("Іван Петренко"), "lead_step": "awaiting_name"},
+        gate_return={"intent": "lead", "route": Route.LEAD, "language": "uk"},
+        lead_return={"response": "what is your phone?", "lead_step": "awaiting_phone", "route": Route.LEAD},
+    )
+    assert result["response"] == "what is your phone?"

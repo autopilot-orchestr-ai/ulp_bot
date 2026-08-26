@@ -52,6 +52,14 @@ async def test_classify_lead_intent_short_circuits_on_affirmative_reply():
     assert result["intent"] == "lead"
 
 
+async def test_classify_lead_intent_skips_llm_when_form_active():
+    state = _state("some name text", lead_step="awaiting_name")
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm:
+        result = await classify_lead_intent(state)
+    get_llm.assert_not_called()
+    assert result["route"] == Route.LEAD
+
+
 async def test_classify_lead_intent_routes_to_chat_when_llm_says_no():
     state = _state("Скільки коштує апостиль?")
     fake_structured = MagicMock()

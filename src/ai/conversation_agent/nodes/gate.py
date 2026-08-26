@@ -53,6 +53,12 @@ def is_affirmative_reply_to_manager_prompt(text: str, history: list[dict]) -> bo
 
 async def classify_lead_intent(state: AgentState) -> dict:
     default_lang = getattr(state, "language", None) or "uk"
+
+    if state.lead_step is not None and state.lead_step != "completed":
+        # route_after_gate overrides whatever we return here when a form is
+        # active, so don't pay for an LLM classification that gets discarded.
+        return {"intent": "lead", "route": Route.LEAD, "language": default_lang}
+
     lang = detect_lang(state.incoming.text, default=default_lang)
 
     if is_affirmative_reply_to_manager_prompt(state.incoming.text, state.conversation_history):

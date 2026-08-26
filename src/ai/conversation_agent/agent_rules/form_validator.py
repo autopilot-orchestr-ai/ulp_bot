@@ -10,7 +10,7 @@ from src.ai.conversation_agent.agent_rules.strings import (
     HUMAN_HANDOFF_PATTERNS
 )
 
-from src.ai.knowledge.llm import get_llm
+from src.ai.llm import get_llm
 from langchain_core.messages import HumanMessage
 from src.config import settings
 

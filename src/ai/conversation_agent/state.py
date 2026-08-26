@@ -29,8 +29,3 @@ class AgentState(BaseState):
     route: Route = Route.END
     current_service: str | None = None
     retrieved_context: str | None = None
-
-
-class ConversationState(BaseState):
-    """State for conversation/FAQ nodes."""
-    intent: str = ""

@@ -6,7 +6,7 @@ from src.ai.conversation_agent.prompts.chat import SYSTEM_PROMPT
 from src.ai.conversation_agent.prompts.handoff import HANDOFF_MESSAGES
 from src.ai.conversation_agent.state import AgentState
 from src.ai.conversation_agent.tools.chat_tools import build_log_unanswered_question_tool
-from src.ai.knowledge.llm import get_llm
+from src.ai.llm import get_llm
 from src.config import settings
 from src.logger import log_event
 

@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from src.ai.conversation_agent.prompts.gate import SYSTEM_PROMPT
 from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.state import AgentState
-from src.ai.knowledge.llm import get_llm
+from src.ai.llm import get_llm
 from src.bots.utils.language_detection import detect_lang
 from src.bots.utils.notify_stuff import notify_manager_aggressive_telegram
 from src.config import settings

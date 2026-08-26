@@ -12,29 +12,13 @@ class Settings(BaseSettings):
     # Token
     telegram_bot_token: str
 
-    # DB
-    db_url: str
-    db_schema: str
-
     # LLM
     llm_provider: str
     llm_model: str
     openai_api_key: str
 
-    # Embeddings
-    embeddings_provider: str
-    embeddings_model: str
-
-    # Knowledge base
-    faq_path: str
     # Company info (single source of truth for the chat node)
     company_info_path: str = "src/assets/company_info.md"
-    website_url: str
-
-    # RAG tuning
-    context_window: int
-    retrieval_k: int
-    similarity_threshold: float
 
     # Staff notifications
     staff_telegram_chat_id: str = ""

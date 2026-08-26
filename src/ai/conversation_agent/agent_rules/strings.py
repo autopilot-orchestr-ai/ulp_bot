@@ -33,10 +33,17 @@ _UK_CHARS = set("іїєґІЇЄҐ")
 
 # Maps multilingual regex matches to a standard Internal ID
 SERVICE_PATTERNS = {
-    # ⚖️ Consultations (Now includes právník, advokát, lawyer, etc.)
-    r'кон[сзм][уь]?ль?т|юрист|віз|виз|poradenstv|konzultac|víz|viz|consult|legal|visa|právník|pravnik|advokát|advokat|lawyer|адвокат': "consultation",
-    
-    # ... keep the rest of your patterns exactly as we set them up earlier ...
+    # ⚖️ Legal consultations - distinct from visa/migration below (used to
+    # be one conflated "consultation" bucket; a client reported the bot
+    # never asking which type was meant).
+    r'юрист|právník|pravnik|advokát|advokat|lawyer|адвокат|legal\s?consult|právní\s?konzult': "legal_consultation",
+    # 🛂 Visa / migration consultations.
+    r'віз|виз|víz|viz|visa|мігра|миграц|migra|migrant': "visa_consultation",
+    # A bare "consultation" with neither legal nor visa qualifier - genuinely
+    # ambiguous, handled by nodes/lead_capture.py's awaiting_consultation_type
+    # step (asks which type before showing pricing).
+    r'кон[сзм][уь]?ль?т|konzultac|consult|poradenstv': "consultation_ambiguous",
+
     r'переклад|перевод|překlad|preklad|translat': "translation",
     r'довір|довер|pln[aeáé]\s?moc|plnou\s?moc|power\s?of\s?attorney': "poa",
     r'апостил|apostil': "apostille",
@@ -48,7 +55,8 @@ SERVICE_PATTERNS = {
 
 # Translates the Internal ID back to the correct language for the bot's response
 SERVICE_LOCALIZED_NAMES = {
-    "consultation": {"uk": "Консультації", "ru": "Консультации", "cs": "Konzultace", "en": "Consultations"},
+    "legal_consultation": {"uk": "Юридичні консультації", "ru": "Юридические консультации", "cs": "Právní konzultace", "en": "Legal Consultations"},
+    "visa_consultation": {"uk": "Візові консультації", "ru": "Визовые консультации", "cs": "Vízové konzultace", "en": "Visa Consultations"},
     "translation": {"uk": "Судові переклади", "ru": "Судебные переводы", "cs": "Soudní překlady", "en": "Sworn Translations"},
     "poa": {"uk": "Довіреності", "ru": "Доверенности", "cs": "Plné moci", "en": "Powers of Attorney"},
     "apostille": {"uk": "Апостиль", "ru": "Апостиль", "cs": "Apostila", "en": "Apostille"},
@@ -174,6 +182,27 @@ EMAIL_REPROMPT = {
     "ru": "Пожалуйста, укажите **действительный адрес электронной почты** (например: imya@example.com), или напишите «нет», чтобы пропустить:",
 }
 
+CONSULTATION_TYPE_PROMPT = {
+    "en": "Would you like a **Legal Consultation** or a **Visa/Migration Consultation**?",
+    "cs": "Chcete **právní konzultaci**, nebo **vízovou/migrační konzultaci**?",
+    "uk": "Вас цікавить **юридична консультація** чи **візова/міграційна консультація**?",
+    "ru": "Вас интересует **юридическая консультация** или **визовая/миграционная консультация**?",
+}
+
+CONTACT_CONFIRMATION_PROMPT = {
+    "en": "Would you like our manager to contact you to arrange this? **Yes** — please leave your name and phone number, or **No**.",
+    "cs": "Přejete si, aby vás kontaktoval náš manažer kvůli vyřízení tohoto požadavku? **Ano** — uveďte prosím své jméno a telefonní číslo, nebo **Ne**.",
+    "uk": "Чи бажаєте, щоб з Вами зв'язався наш менеджер для оформлення запиту? **Так** — залиште, будь ласка, Ваше ім'я та номер телефону, або **Ні**.",
+    "ru": "Хотите, чтобы с Вами связался наш менеджер для оформления запроса? **Да** — оставьте, пожалуйста, Ваше имя и номер телефона, или **Нет**.",
+}
+
+CONTACT_DECLINED_MESSAGE = {
+    "en": "No problem at all! Feel free to reach out anytime if you have questions. 😊",
+    "cs": "Žádný problém! Pokud budete mít jakékoli dotazy, neváhejte se kdykoli ozvat. 😊",
+    "uk": "Добре, немає проблем! Якщо виникнуть питання — звертайтесь у будь-який час. 😊",
+    "ru": "Хорошо, никаких проблем! Если возникнут вопросы — обращайтесь в любое время. 😊",
+}
+
 SERVICES_LIST_RESPONSE = {
     "uk": "Ось перелік послуг, які ми надаємо:\n\n⚖️ **Юридичні консультації**\n🛂 **Візові консультації**\n📄 **Завірені судові переклади**\n🔏 **Апостиль документів**\n📑 **Складення довіреностей**\n✍️ **Офіційні заяви** (згода на виїзд, спадщина)\n🏛️ **Довідка про несудимість з України**\n💍 **Супровід при одруженні в Чехії**\n🗂️ **Дублікати документів з України**\n\nЯка саме послуга вас цікавить?",
     "ru": "Вот перечень услуг, которые мы предоставляем:\n\n⚖️ **Юридические консультации**\n🛂 **Визовые консультации**\n📄 **Заверенные судебные переводы**\n🔏 **Апостиль документов**\n📑 **Составление доверенностей**\n✍️ **Официальные заявления** (согласие на выезд, наследство)\n🏛️ **Справка об отсутствии судимости из Украины**\n💍 **Сопровождение при бракосочетании в Чехии**\n🗂️ **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
@@ -182,7 +211,7 @@ SERVICES_LIST_RESPONSE = {
 }
 
 WHEN_WILL_YOU_CALL_RESPONSE = {
-    "uk": "З Вами зв'яжуться в найкоротші строки під час нашого робочого дня з понеділка по п'ятницю між 8:00 та 17:00.",
+    "uk": "З Вами зв'яжуться в найкоротші строки під час нашого робочого дня з понеділка по п'ятницю між 8:00 та 17:00 годинами.",
     "ru": "С Вами свяжутся в кратчайшие сроки в наши рабочие часы с понедельника по пятницу с 8:00 до 17:00.",
     "cs": "Budeme vás kontaktovat co nejdříve během naší pracovní doby od pondělí do pátku mezi 8:00 a 17:00.",
     "en": "We will contact you as soon as possible during our working hours, Monday to Friday between 8:00 and 17:00."

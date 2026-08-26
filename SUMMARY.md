@@ -4,6 +4,25 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 22:32:25 +0200 — `277ff3c`
+**Policy: manager is only notified for explicit human requests or completed leads, not for hostility alone**
+
+User-directed policy change: "Manager should only be informed in two cases: when the client
+specifically asks to speak with a human, or when the client confirms that they want to be
+contacted and provides their contact details." Both cases already funnel through the existing
+`gate` → `lead_capture` flow, which only notifies once contact details are captured.
+
+Removed the aggressive-message Telegram alert from `gate.py` — both the LLM-classified path and
+the mid-form regex fast path added earlier *this same session* specifically to preserve it (a
+direct reversal of that earlier decision, at the user's explicit request). `is_aggressive` is
+still detected and logged for visibility, just no longer pings staff on its own.
+`notify_manager_aggressive_telegram` in `notify_stuff.py` is left in place but now has no caller.
+Tests and `CLAUDE.md` updated to match (also corrected an inaccuracy caught in passing:
+`notify_manager_media_telegram` is still actively used for media uploads, unaffected by this
+change).
+
+---
+
 ## 2026-08-26 22:21:39 +0200 — `5880de1`
 **Prompt fix: chat was summarizing service options down to 1-2, omitting real priced variants**
 

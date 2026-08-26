@@ -1,6 +1,9 @@
+import re
+
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
+from src.ai.conversation_agent.agent_rules.strings import PROFANITY_PATTERNS
 from src.ai.conversation_agent.prompts.gate import SYSTEM_PROMPT
 from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.state import AgentState
@@ -56,7 +59,21 @@ async def classify_lead_intent(state: AgentState) -> dict:
 
     if state.lead_step is not None and state.lead_step != "completed":
         # route_after_gate overrides whatever we return here when a form is
-        # active, so don't pay for an LLM classification that gets discarded.
+        # active, so skip the LLM classification call entirely (it would be
+        # discarded). Still run a cheap regex-only profanity check so staff
+        # don't lose visibility into hostile messages sent mid-form - the
+        # pre-refactor supervisor.py always ran a full LLM check here.
+        if any(re.search(pattern, state.incoming.text) for pattern in PROFANITY_PATTERNS):
+            log_event("aggressive_message_flagged", status="ok", text=state.incoming.text, source="regex_mid_form")
+            try:
+                await notify_manager_aggressive_telegram(
+                    client_id=state.incoming.client_id,
+                    client_name=state.incoming.client_name,
+                    text=state.incoming.text,
+                    lang=default_lang,
+                )
+            except Exception:
+                pass
         return {"intent": "lead", "route": Route.LEAD, "language": default_lang}
 
     lang = detect_lang(state.incoming.text, default=default_lang)

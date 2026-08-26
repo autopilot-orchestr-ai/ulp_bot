@@ -60,6 +60,36 @@ async def test_classify_lead_intent_skips_llm_when_form_active():
     assert result["route"] == Route.LEAD
 
 
+async def test_classify_lead_intent_flags_profanity_mid_form_via_regex_no_llm():
+    # "сука" matches PROFANITY_PATTERNS directly (confirmed against
+    # src/ai/conversation_agent/agent_rules/strings.py:86-91); "ти тупий
+    # бот" (masc. "тупий") does NOT match the \bтуп[аоыіеє]+[ая]?\b pattern,
+    # which only covers "и" via the Ukrainian/Russian vowel class it lists.
+    state = _state("ти сука, чому мовчиш?", lead_step="awaiting_name")
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm, \
+         patch(
+             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
+             new_callable=AsyncMock,
+         ) as notify:
+        result = await classify_lead_intent(state)
+    get_llm.assert_not_called()
+    notify.assert_awaited_once()
+    assert result["route"] == Route.LEAD
+
+
+async def test_classify_lead_intent_mid_form_no_profanity_no_notify():
+    state = _state("Іван Петренко", lead_step="awaiting_name")
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm, \
+         patch(
+             "src.ai.conversation_agent.nodes.gate.notify_manager_aggressive_telegram",
+             new_callable=AsyncMock,
+         ) as notify:
+        result = await classify_lead_intent(state)
+    get_llm.assert_not_called()
+    notify.assert_not_awaited()
+    assert result["route"] == Route.LEAD
+
+
 async def test_classify_lead_intent_routes_to_chat_when_llm_says_no():
     state = _state("Скільки коштує апостиль?")
     fake_structured = MagicMock()

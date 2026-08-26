@@ -20,9 +20,6 @@ poetry install          # install dependencies
 poetry run python src/main.py   # run the Telegram bot worker locally (requires a filled .env)
 ```
 
-There is no lint/format/test tooling configured (no ruff/black/pytest config, no test suite in the repo).
-Don't assume any of these commands exist — verify before suggesting them to the user.
-
 Docker:
 ```bash
 docker compose up -d --build --force-recreate ulp_bot

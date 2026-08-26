@@ -1,6 +1,7 @@
 from src.ai.conversation_agent.graph import graph
 from src.schemas.ai.messages import IncomingMessage
 from src.api_client.core_api import core_api
+from src.logger import log_event
 
 # Last-resort text if a graph run somehow produces no response — should never
 # be seen in normal operation, it just guarantees we never send Telegram an empty message.
@@ -51,6 +52,14 @@ async def handle_incoming(incoming: IncomingMessage) -> str:
 
     if not response_text:
         response_text = _EMPTY_RESPONSE_FALLBACK.get(detected_lang, _EMPTY_RESPONSE_FALLBACK["uk"])
+
+    log_event(
+        "response_sent",
+        status="ok",
+        response=response_text,
+        intent=detected_intent,
+        lang=detected_lang,
+    )
 
     await core_api.save_chat_message(
         conversation_id=conversation_id,

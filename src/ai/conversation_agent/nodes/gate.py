@@ -63,6 +63,7 @@ async def classify_lead_intent(state: AgentState) -> dict:
         # discarded). Still run a cheap regex-only profanity check so staff
         # don't lose visibility into hostile messages sent mid-form - the
         # pre-refactor supervisor.py always ran a full LLM check here.
+        log_event("gate_classified", status="skipped_mid_form", lead_step=state.lead_step, language=default_lang)
         if any(re.search(pattern, state.incoming.text) for pattern in PROFANITY_PATTERNS):
             log_event("aggressive_message_flagged", status="ok", text=state.incoming.text, source="regex_mid_form")
             try:
@@ -101,7 +102,13 @@ async def classify_lead_intent(state: AgentState) -> dict:
         log_event("gate_classified", status="error", error=str(exc))
         raise
 
-    log_event("gate_classified", status="ok", wants_lead=result.wants_lead)
+    log_event(
+        "gate_classified",
+        status="ok",
+        wants_lead=result.wants_lead,
+        is_aggressive=result.is_aggressive,
+        language=lang,
+    )
 
     if result.is_aggressive:
         log_event("aggressive_message_flagged", status="ok", text=state.incoming.text)

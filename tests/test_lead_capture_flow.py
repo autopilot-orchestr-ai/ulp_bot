@@ -155,3 +155,14 @@ async def test_step_awaiting_contact_confirmation_unclear_reprompts():
         result = await _step_awaiting_contact_confirmation(state)
     assert result.get("lead_step") is None  # unchanged, caller keeps current step
     assert result.get("route_to_llm") is not True
+
+
+def test_check_call_timing_prepends_weekend_notice_mid_form():
+    import asyncio
+    from src.ai.conversation_agent.nodes.lead_capture import _check_call_timing
+
+    state = _state("коли ви зателефонуєте мені в суботу?", language="uk", lead_step="awaiting_name")
+    result = asyncio.run(_check_call_timing(state, "awaiting_name"))
+    assert result is not None
+    assert "вихідн" in result["response"].lower()
+    assert "8:00" in result["response"]

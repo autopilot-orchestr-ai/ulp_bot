@@ -2,6 +2,8 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
+from src.ai.conversation_agent.agent_rules.strings import WEEKEND_NOTICES, WHEN_WILL_YOU_CALL_RESPONSE
 from src.ai.conversation_agent.prompts.chat import SYSTEM_PROMPT
 from src.ai.conversation_agent.prompts.handoff import HANDOFF_MESSAGES
 from src.ai.conversation_agent.state import AgentState
@@ -32,6 +34,18 @@ async def chat_node(state: AgentState) -> dict:
     for unanswerable-but-relevant questions all live here now, grounded
     entirely in src/assets/company_info.md rather than retrieval."""
     lang = state.language or "uk"
+
+    # Fast-path, mirrors lead_capture.py's _check_call_timing: this used to
+    # only have exact-wording guarantees inside an active lead form (the
+    # standalone node that handled it everywhere else was removed in the
+    # 2026-08-26 graph refactor - an unintentional gap, not a deliberate
+    # decision). No LLM call needed for this one.
+    if FormValidator.is_asking_call_timing(state.incoming.text):
+        response = WHEN_WILL_YOU_CALL_RESPONSE.get(lang, WHEN_WILL_YOU_CALL_RESPONSE["en"])
+        if FormValidator.has_weekend_mention(state.incoming.text):
+            response = WEEKEND_NOTICES.get(lang, WEEKEND_NOTICES["en"]) + response
+        return {"response": response}
+
     log_unanswered_question = build_log_unanswered_question_tool(
         conversation_id=state.conversation_id
     )

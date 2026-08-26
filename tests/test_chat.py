@@ -85,3 +85,48 @@ async def test_chat_short_circuits_to_handoff_message_on_log_unanswered_question
         result = await chat_node(_state("What should I do about custody?", language="en"))
     fake_tool.ainvoke.assert_awaited_once_with({"question": "custody advice"})
     assert "office@ak-ulp.cz" in result["response"]
+
+
+async def test_chat_call_timing_fast_path_skips_llm(tmp_path):
+    info_file = tmp_path / "company_info.md"
+    info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")
+    with patch(
+        "src.ai.conversation_agent.nodes.chat.get_llm"
+    ) as get_llm, patch(
+        "src.ai.conversation_agent.nodes.chat.settings"
+    ) as mock_settings:
+        mock_settings.company_info_path = str(info_file)
+        mock_settings.llm_model = "gpt-4o-mini"
+        result = await chat_node(_state("коли ви зателефонуєте?", language="uk"))
+    get_llm.assert_not_called()
+    assert "8:00" in result["response"] and "17:00" in result["response"]
+
+
+async def test_chat_call_timing_fast_path_prepends_weekend_notice(tmp_path):
+    info_file = tmp_path / "company_info.md"
+    info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")
+    with patch(
+        "src.ai.conversation_agent.nodes.chat.get_llm"
+    ), patch(
+        "src.ai.conversation_agent.nodes.chat.settings"
+    ) as mock_settings:
+        mock_settings.company_info_path = str(info_file)
+        mock_settings.llm_model = "gpt-4o-mini"
+        result = await chat_node(_state("зателефонуйте мені в суботу", language="uk"))
+    assert "вихідн" in result["response"].lower()
+    assert "8:00" in result["response"]
+
+
+async def test_chat_non_call_timing_message_still_uses_llm(tmp_path):
+    info_file = tmp_path / "company_info.md"
+    info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")
+    reply = AIMessage(content="hi there", tool_calls=[])
+    with patch(
+        "src.ai.conversation_agent.nodes.chat.get_llm", return_value=_fake_llm(reply)
+    ), patch(
+        "src.ai.conversation_agent.nodes.chat.settings"
+    ) as mock_settings:
+        mock_settings.company_info_path = str(info_file)
+        mock_settings.llm_model = "gpt-4o-mini"
+        result = await chat_node(_state("Привіт", language="uk"))
+    assert result == {"response": "hi there"}

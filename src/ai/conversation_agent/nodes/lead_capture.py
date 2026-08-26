@@ -59,9 +59,12 @@ def _service_reprompt(service_id: str, lang: str) -> str:
 async def _check_call_timing(state: AgentState, step: Optional[str]) -> Optional[dict]:
     if not FormValidator.is_asking_call_timing(state.incoming.text):
         return None
+    response = WHEN_WILL_YOU_CALL_RESPONSE.get(state.language, WHEN_WILL_YOU_CALL_RESPONSE["en"])
+    if FormValidator.has_weekend_mention(state.incoming.text):
+        response = WEEKEND_NOTICES.get(state.language, WEEKEND_NOTICES["en"]) + response
     return {
         "route_to_llm": False,
-        "response": WHEN_WILL_YOU_CALL_RESPONSE.get(state.language, WHEN_WILL_YOU_CALL_RESPONSE["en"]),
+        "response": response,
     }
 
 async def _check_question_trap(state: AgentState, step: Optional[str]) -> Optional[dict]:

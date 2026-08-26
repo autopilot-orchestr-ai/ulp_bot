@@ -1,4 +1,5 @@
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, StateGraph
 
 from src.ai.conversation_agent.nodes.chat import chat_node
@@ -7,6 +8,7 @@ from src.ai.conversation_agent.nodes.lead_capture import lead_capture_node
 from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.routing import route_after_gate, route_after_lead_capture
 from src.ai.conversation_agent.state import AgentState
+from src.schemas.ai.messages import IncomingMessage
 
 
 def build_graph() -> StateGraph:
@@ -41,7 +43,14 @@ def build_graph() -> StateGraph:
 
     graph.add_edge("chat", END)
 
-    memory = MemorySaver()
+    # AgentState.incoming (IncomingMessage) and .route (Route) are custom
+    # types stored in checkpointed state. Without an explicit allowlist,
+    # langgraph's msgpack serde logs a deprecation warning on every
+    # serialize/deserialize and will refuse them outright in a future
+    # version - allowlist both now rather than waiting for that to break.
+    memory = MemorySaver(
+        serde=JsonPlusSerializer(allowed_msgpack_modules=[IncomingMessage, Route])
+    )
     return graph.compile(checkpointer=memory)
 
 

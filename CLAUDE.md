@@ -110,14 +110,6 @@ There used to be a pgvector-backed knowledge base here (`ai/knowledge/store.py`,
 production) and, per the single-file design above, isn't needed. `ai/knowledge/llm.py` (a generic
 `ChatOpenAI` factory, unrelated to that pipeline despite the old path) moved to `ai/llm.py`.
 
-### Knowledge base
-
-`src/ai/knowledge/`: `store.py` wraps `langchain_postgres.PGVector` (async, `postgresql+psycopg://`) scoped to
-a `{schema}_knowledge_base` collection; `faq_loader.py` is an offline/setup script that loads a multilingual
-YAML FAQ file into it; `llm.py`/`embeddings.py` are thin factories around `ChatOpenAI`/`OpenAIEmbeddings`
-(Anthropic/Gemini/HuggingFace alternatives are commented out but not wired up — swapping providers means
-editing these factories, not just config).
-
 ### Localization
 
 The bot is multilingual (uk/cs/ru/en). Language is detected per-message via `langdetect` in

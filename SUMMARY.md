@@ -4,6 +4,26 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 16:58:43 +0200 — `158c166`
+**Fix "I need a lawyer"-style English sentences misdetected as unsupported languages**
+
+The previous greeting-word fix (see the `eba8fec` entry below) only patched exact short words. A
+full English sentence hit the same underlying problem: `langdetect`'s single top-1 guess for "I
+need a lawyer" is `cy` (Welsh) at 71% confidence, with `en` a real but discarded second-place
+candidate at 29% — confirmed live in production (`gate_classified language=uk` for an English
+message, then the bot replied in Ukrainian). Found by the user testing right after the previous
+greeting fix shipped.
+
+Root-cause fix, not another word-list patch: `detect_lang` now uses `detect_langs()` (ranked
+candidates, not just the single best guess) and returns the highest-ranked candidate that's
+actually in `SUPPORTED_LANGUAGES`, instead of trusting the top-1 guess even when it's a language
+we don't support at all. Only changes behavior when the top guess isn't supported to begin with —
+verified against real `langdetect` output that this doesn't regress any previously-correct case,
+and that genuinely unsupported languages (German, French) still fall through to the default
+correctly. Regression tests added.
+
+---
+
 ## 2026-08-26 16:47:40 +0200 — `6a68982`
 **Log the actual reply text and classification reasoning**
 

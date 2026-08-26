@@ -24,25 +24,32 @@ async def info_agent(state: AgentState) -> dict:
     log_event("info_agent_start", text=user_message)
 
     # Increased k to 10 so all legal service entries are fetched
-    # Use your custom search method instead
     docs = await knowledge_store.search(user_message, k=10)
     context = "\n\n".join([doc.page_content for doc in docs])
 
-    # Assuming your state model has the 'language' field as defined earlier
     system_prompt = INFO_SYSTEM_PROMPT.format(
         context=context,
-        lang=state.language # or state["language"] if using TypedDict
+        lang=state.language,
     )
     llm = get_llm(settings.llm_model)
 
-    messages = [
+    history_messages = []
+    for m in state.conversation_history[-8:]:
+        if m["role"] == "user":
+            history_messages.append(HumanMessage(content=m["content"]))
+        else:
+            history_messages.append(AIMessage(content=m["content"]))
+
+    llm_messages = [
         SystemMessage(content=system_prompt),
-        *state.messages,
+        *history_messages,
+        HumanMessage(content=user_message),
     ]
 
-    response = await llm.ainvoke(messages)
+    response = await llm.ainvoke(llm_messages)
+    log_event("info_agent_finished", status="ok")
 
     return {
-        "messages": [response],
-        "next_route": Route.END,
+        "response": response.content,
+        "route": Route.END,
     }

@@ -3,6 +3,7 @@ import re
 from pydantic import BaseModel, Field
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
+from src.ai.conversation_agent.agent_rules.affirmation import is_affirmative
 from src.ai.conversation_agent.agent_rules.strings import PROFANITY_PATTERNS
 from src.ai.conversation_agent.prompts.gate import SYSTEM_PROMPT
 from src.ai.conversation_agent.routes import Route
@@ -12,7 +13,6 @@ from src.bots.utils.language_detection import detect_lang
 from src.config import settings
 from src.logger import log_event
 
-_AFFIRMATIVE_WORDS = {"ano", "yes", "так", "да", "chci", "y"}
 _MANAGER_PROMPT_MARKERS = [
     "(ano / ne)", "(yes / no)", "(так / ні)", "(да / нет)",
     "kontaktoval", "contact", "зв'яжеться", "свяжется", "contact you",
@@ -46,11 +46,10 @@ def is_affirmative_reply_to_manager_prompt(text: str, history: list[dict]) -> bo
     """True if the bot's last message asked "want us to contact you?" and
     this reply is a bare "yes"-shaped answer - short-circuits the LLM call
     for this very common, very unambiguous turn."""
-    text_lower = text.lower().strip()
     last_bot_msg = _last_bot_message(history)
     if not any(marker in last_bot_msg for marker in _MANAGER_PROMPT_MARKERS):
         return False
-    return text_lower == "a" or any(text_lower.startswith(w) for w in _AFFIRMATIVE_WORDS)
+    return is_affirmative(text)
 
 
 async def classify_lead_intent(state: AgentState) -> dict:

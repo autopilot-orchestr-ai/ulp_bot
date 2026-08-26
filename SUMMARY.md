@@ -4,6 +4,17 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 22:10:28 +0200 — `3307e1c`
+**Content correction: JUDr. Ulyana Kurivchakova consultations are online or in-person, not in-person only**
+
+The user spotted the bot stating "in-person only" for her 60-min consultation while testing — actually
+available either way. First real content edit to `src/assets/company_info.md` since it was introduced:
+fixed the one incorrect fact in all 4 languages, in the single place it lives; no other copy of it exists
+anywhere else in the repo (confirmed by grep) — exactly the point of consolidating company info into one
+file.
+
+---
+
 ## 2026-08-26 22:00:10 +0200 — `f329040`
 **Fix `**bold**` markdown not rendering — showed as literal asterisks in the chat**
 

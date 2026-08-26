@@ -158,7 +158,8 @@ async def _step_awaiting_service(state: AgentState) -> dict:
     }
 
 async def _step_awaiting_consultation_type(state: AgentState) -> dict:
-    detected_id = FormValidator.detect_service(state.incoming.text)
+    detected_id = state.current_service if state.current_service in ("legal_consultation", "visa_consultation") else None
+    detected_id = detected_id or FormValidator.detect_service(state.incoming.text)
 
     if detected_id in ("legal_consultation", "visa_consultation"):
         if not FormValidator.has_price_been_shown(state.conversation_history):

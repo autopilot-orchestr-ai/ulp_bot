@@ -101,6 +101,21 @@ async def test_step_awaiting_consultation_type_hands_off_on_question():
     assert result.get("route_to_llm") is True
 
 
+async def test_step_awaiting_consultation_type_resumes_from_current_service_after_chat_handoff():
+    """Regression: after resolving to legal_consultation and handing off to
+    chat for pricing (current_service set, step unchanged), the next reply
+    ("так") doesn't itself mention legal/visa - the handler must not lose
+    the already-resolved service and re-ask the disambiguation question."""
+    history = [{"role": "assistant", "content": "Legal consultation costs 1900 CZK"}]
+    state = _state(
+        "так", lead_step="awaiting_consultation_type",
+        current_service="legal_consultation", history=history,
+    )
+    result = await _step_awaiting_consultation_type(state)
+    assert result["current_service"] == "legal_consultation"
+    assert result["lead_step"] == "awaiting_contact_confirmation"
+
+
 # --- _step_awaiting_contact_confirmation ---
 
 async def test_step_awaiting_contact_confirmation_yes_advances_to_name():

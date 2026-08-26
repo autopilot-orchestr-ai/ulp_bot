@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `src/ai/conversation_agent/services/email_sender.py` for the hardcoded firm details). It runs as one long-lived
 process per deployment (`CLIENT_ID` env var identifies the tenant), currently polling Telegram, and delegates
 all persistence (conversations, chat history, unanswered questions) to an external "Core API" backend service
-that is **not** part of this repo — see `src/api_client/core_api.py`. There is no local database; PostgreSQL
-(`db_url`/`db_schema` settings) is used only as a pgvector knowledge-base store for RAG.
+that is **not** part of this repo — see `src/api_client/core_api.py`. There is no local database and no vector store — company info lives in a single Markdown file
+(see "Company info" below).
 
 ## Commands
 
@@ -34,9 +34,27 @@ Deploys are automatic: pushing to `main` triggers `.github/workflows/deploy.yml`
 
 All runtime config is a single `pydantic-settings` model in `src/config.py`, loaded from `.env` (see that file
 for the full list of required variables — most have no default and the process will fail to start without them).
-Key groups: Telegram token, Core API URL, LLM provider/model + OpenAI key, embeddings model, FAQ path, RAG
-tuning (`context_window`, `retrieval_k`, `similarity_threshold`), Google Calendar booking config, and SMTP for
-booking confirmation emails.
+Key groups: Telegram token, Core API URL, LLM provider/model + OpenAI key, company info file path
+(`company_info_path`), Google Calendar booking config, and SMTP for booking confirmation emails.
+
+### Tests
+
+```bash
+poetry run pytest -v              # full suite
+poetry run pytest tests/test_gate.py -v   # single file
+```
+
+`tests/conftest.py` stubs every required `Settings` field via `os.environ.setdefault(...)` so test modules
+can import `src.*` without a real `.env` — see its docstring before adding a new required (no-default)
+field to `src/config.py`, or tests will start failing on collection.
+
+### Company info
+
+`src/assets/company_info.md` is the single source of truth for everything the `chat` node tells users about
+the firm — services, pricing, required documents, contact/office/hours, FAQ — in all four supported
+languages (en/uk/cs/ru). It's read fresh from disk on every `chat` turn (`nodes/chat.py::_read_company_info`),
+so editing it takes effect on the very next message with no reload, restart, or deploy step. There is no
+vector search or embeddings involved — the whole file is injected into the system prompt directly.
 
 ## Architecture
 
@@ -55,29 +73,42 @@ entry point all bots funnel through** (so a future WhatsApp/Instagram bot — st
 
 ### The conversation graph
 
-`src/ai/conversation_agent/` implements a LangGraph state machine (`AgentState` in `state.py`) with nodes in
-`nodes/`:
+`src/ai/conversation_agent/` implements a LangGraph state machine (`AgentState` in `state.py`) with three
+nodes:
 
-- **`supervisor.py`** (`classify_intent`) — the entry node. Runs a few cheap intercepts first (a "when will you
-  call me" pattern match, an affirmative-reply-to-a-manager-prompt heuristic) before falling back to an LLM
-  structured-output call that classifies intent and flags aggressive/hostile messages (which fires a
-  fire-and-forget staff Telegram alert). Maps intent → `Route` enum (`routes.py`).
-- **`lead_capture.py`** — a manually-coded multi-step form (service → name → phone → email) driven by
-  `state.lead_step`, not an LLM conversation. Each step has interceptors (cancel, "user is asking a question
-  instead of answering", call-timing) checked before the step handler. On completion it notifies staff via
-  Telegram (`notify_manager_lead_telegram`). Field validation (name/phone/email/service detection, profanity
-  checks) lives in `agent_rules/form_validator.py`, which itself calls the LLM for fuzzy checks like
-  "is this a real name" — validation is not purely regex-based.
-- **`info.py`** — general Q&A: retrieves from the pgvector knowledge store (`ai/knowledge/store.py`) and answers
-  via LLM with retrieved context injected into the system prompt.
-- **`escalation.py`**, **`off_topic.py`**, **`call_timing.py`** — smaller terminal nodes for handoff-to-human,
-  off-topic messages, and "when will you call" replies.
+- **`gate`** (`nodes/gate.py`, `classify_lead_intent`) — the entry node. A binary classifier, not a 5-way
+  one: it decides only `wants_lead` (clear commitment to proceed, or an explicit request for a human) via
+  one LLM structured-output call, plus the same aggressive-message flagging the old supervisor had. Two
+  cheap intercepts run first: if a lead-capture form is already active (`lead_step` set, not `"completed"`),
+  the LLM call is skipped entirely (`routing.py::route_after_gate` sends the turn straight to `lead_capture`
+  regardless of what `gate` returns); a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply
+  immediately after the bot itself asked "want us to contact you?", without a model call.
+- **`lead_capture`** (`nodes/lead_capture.py`) — unchanged: a manually-coded multi-step form (service → name
+  → phone → email) driven by `state.lead_step`, with regex+LLM field validation in `agent_rules/form_validator.py`.
+  On completion it notifies staff via Telegram. It can hand off mid-form to `chat` (`Route.CHAT`) when the
+  user asks a question instead of answering, or end the turn (`Route.END`) after a reprompt or a completed
+  step — see `routing.py::route_after_lead_capture`'s docstring for why `Route.LEAD` must map to `END` here
+  and not back into `lead_capture` itself (a same-turn self-loop that used to hit `GraphRecursionError`,
+  fixed 2026-08-26).
+- **`chat`** (`nodes/chat.py`, `chat_node`) — everything else: FAQ answering, identity questions, off-topic
+  redirects, and handoff-for-unanswerable-questions, all in one LLM node. It reads `src/assets/company_info.md`
+  fresh from disk on every call and injects the whole file into the system prompt — this is the single source
+  of truth for services, pricing, required documents, contact/office/hours, and FAQ, in all four languages;
+  edit that file and the very next message reflects the change, no reload or restart. Bound to one tool,
+  `log_unanswered_question` (`tools/chat_tools.py`, wraps `core_api.store_unanswered_question` against the
+  *real* `conversation_id` — the old `escalation.py` this replaced stubbed a throwaway `uuid4()` here and
+  silently orphaned every logged question). Calling it short-circuits straight to a canned
+  `HANDOFF_MESSAGES[lang]` reply (`prompts/handoff.py`) instead of letting the model free-generate what gets
+  promised to a client.
 
-Graph wiring (`graph.py`): `supervisor` is the entry point and conditionally routes to `info` / `lead_capture` /
-`escalation` / `off_topic` / `call_timing`. Notably, `_route_after_supervisor` overrides the classifier's route
-whenever a lead-capture form is mid-flight (`lead_step` set and not `"completed"`), so an in-progress form
-always wins over re-classification. `lead_capture` has its own conditional exit edges (it can hand off to
-`info` or `escalation` mid-form, loop back to itself, or reach `END`). All other nodes go straight to `END`.
+Graph wiring (`graph.py` + `routing.py`): `gate` is the entry point and conditionally routes to `lead_capture`
+or `chat`. `lead_capture` can hand back to `chat` or end the turn. `chat` always ends the turn.
+
+There used to be a pgvector-backed knowledge base here (`ai/knowledge/store.py`, `embeddings.py`,
+`faq_loader.py`, `src/assets/faq.yaml`) — it's gone. It was already non-functional in practice
+(`load_faq()` was never called from anywhere in the codebase, so the KB was very likely always empty in
+production) and, per the single-file design above, isn't needed. `ai/knowledge/llm.py` (a generic
+`ChatOpenAI` factory, unrelated to that pipeline despite the old path) moved to `ai/llm.py`.
 
 ### Knowledge base
 
@@ -95,17 +126,13 @@ falls back to the conversation's existing language). Nearly every user-facing st
 constant, centralized in `src/ai/conversation_agent/agent_rules/strings.py` — when adding a new user-facing
 message, add it to all four languages there rather than inlining a new string in a node.
 
-`src/ai/conversation_agent/data/strings.py` and `src/ai/conversation_agent/data/lang.py` also exist but are
-**dead code** — leftovers from an incomplete migration (nothing in the codebase imports `data.lang`, and the
-only importer of `data.strings` is `data.lang` itself). Don't add strings there; nothing reads them.
-
 ### Staff notifications
 
 `src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts (new lead, media received, aggressive
 message, contacts shown) directly via the aiogram `bot` instance, imported lazily inside each function to avoid
 a circular import with `src/bots/tgbot/bot.py`. None of the four functions guard their own `bot.send_message`
-call with a try/except — whether a failure is swallowed depends entirely on the call site. Only the aggressive-
-message alert is actually guarded (`supervisor.py` wraps it in `try/except Exception: pass`). The lead-capture
-completion alert (`lead_capture.py`, `notify_manager_lead_telegram`) is **not** guarded and runs before the
-"thank you" response is built — if that Telegram send fails, the client who just finished the form gets no
-confirmation message at all, not even a generic error.
+call with a try/except — whether a failure is swallowed depends entirely on the call site. The aggressive-
+message alert is guarded (`nodes/gate.py` wraps it in `try/except Exception: pass`). The lead-capture
+completion alert (`nodes/lead_capture.py`, `notify_manager_lead_telegram`) is **not** guarded and runs before
+the "thank you" response is built — if that Telegram send fails, the client who just finished the form gets
+no confirmation message at all, not even a generic error.

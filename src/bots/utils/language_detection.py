@@ -10,12 +10,21 @@ DetectorFactory.seed = 0
 
 SUPPORTED_LANGUAGES = {"uk", "cs", "ru", "en"}
 
-# Fast-path mapping for very short responses where statistical detection can be unreliable
+# Fast-path mapping for very short responses where statistical detection can be unreliable.
+# langdetect is unreliable on short text in general, but common greetings are
+# a specific, verified problem case in production: detect("hello") == "fi",
+# detect("hi") == "sw", detect("ahoj") == "so", detect("привет") == "mk" -
+# none of the greetings below detect correctly without this fast path.
 _SHORT_WORDS_MAP = {
     "так": "uk", "ні": "uk",
     "ano": "cs", "ne": "cs",
     "yes": "en", "no": "en",
-    "да": "ru", "нет": "ru"
+    "да": "ru", "нет": "ru",
+    "hello": "en", "hi": "en", "hey": "en",
+    "good morning": "en", "good day": "en", "good evening": "en",
+    "ahoj": "cs", "čau": "cs", "cau": "cs", "dobry den": "cs", "dobrý den": "cs",
+    "привіт": "uk", "вітаю": "uk",
+    "привет": "ru",
 }
 
 
@@ -36,8 +45,8 @@ def detect_lang(text: str, default: str = "uk") -> str:
     if not text or not text.strip():
         return default
         
-    text_cleaned = text.lower().strip()
-    
+    text_cleaned = text.lower().strip().rstrip("!?.,;:")
+
     # Handle extremely short inputs instantly to prevent detection errors
     if text_cleaned in _SHORT_WORDS_MAP:
         return _SHORT_WORDS_MAP[text_cleaned]

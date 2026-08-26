@@ -2,7 +2,7 @@ from src.bots.utils.strings import MEDIA_REPLIES
 from src.api_client import core_api
 from aiogram.types import Message
 import re
-from langdetect import detect, DetectorFactory
+from langdetect import detect_langs, DetectorFactory
 from langdetect.lang_detect_exception import LangDetectException
 
 # Ensure deterministic results from langdetect
@@ -52,9 +52,17 @@ def detect_lang(text: str, default: str = "uk") -> str:
         return _SHORT_WORDS_MAP[text_cleaned]
 
     try:
-        detected = detect(text)
-        if detected in SUPPORTED_LANGUAGES:
-            return detected
+        # detect() only returns langdetect's single top guess, which is
+        # frequently a language we don't even support (verified in
+        # production: "I need a lawyer" -> "cy" (Welsh) at 71% confidence,
+        # with "en" a real but discarded second-place candidate at 29%).
+        # Scanning all ranked candidates and taking the best one we actually
+        # support is strictly better than defaulting whenever the top-1
+        # guess happens to miss - it only changes the outcome when the top
+        # guess isn't in SUPPORTED_LANGUAGES to begin with.
+        for candidate in detect_langs(text):
+            if candidate.lang in SUPPORTED_LANGUAGES:
+                return candidate.lang
         return default
     except LangDetectException:
         return default

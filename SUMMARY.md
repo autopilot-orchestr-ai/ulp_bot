@@ -4,6 +4,27 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 18:12:31 +0200 — `de6c2e1`
+**Fix two crashes in lead_capture that silently dropped completed leads**
+
+Both pre-existing (out of scope for the graph refactor, `lead_capture.py`'s logic was untouched
+there), and both fired for real on a live test lead — name and phone already captured, manager
+never notified.
+
+1. `_step_awaiting_email`'s invalid-email reprompt referenced `state.msg["ask_email"]` —
+   `AgentState` has no `msg` field. Crashed uncaught the moment an email failed
+   `FormValidator`'s validation (a gibberish test address rejected by the consonant-run
+   heuristic). Added `EMAIL_REPROMPT` to `agent_rules/strings.py`, following the existing
+   `PHONE_REPROMPT`/`NAME_REPROMPT` pattern exactly.
+2. The success branch (valid email, or skip) called `notify_manager_lead_telegram(...,
+   user=state.incoming.user, ...)` — `IncomingMessage` has no `user` field at all (it's a
+   channel-agnostic schema). This meant **every** successfully completed lead crashed right
+   before the manager notification, independent of bug 1. Fixed with `getattr(state.incoming,
+   "user", None)`, matching the identical defensive pattern the old (now-deleted) `escalation.py`
+   already used for this exact call.
+
+---
+
 ## 2026-08-26 16:58:43 +0200 — `158c166`
 **Fix "I need a lawyer"-style English sentences misdetected as unsupported languages**
 

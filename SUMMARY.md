@@ -4,6 +4,82 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 16:47:40 +0200 — `6a68982`
+**Log the actual reply text and classification reasoning**
+
+Requested during production testing: `docker compose logs` showed event names (`gate_classified`,
+`chat_replied`) but not the reply content or why a decision was made, making it hard to verify
+behavior from logs alone.
+
+- `handler.py`: single `response_sent` log at the one choke point all replies pass through, with
+  the full response text, detected intent, and detected language — covers `chat`, `lead_capture`,
+  and the empty-response fallback in one place.
+- `gate.py`: `gate_classified` now also logs `is_aggressive` and `language` (previously only
+  `wants_lead`); the mid-form skip branch now logs its own decision too (previously silent unless
+  profanity was flagged).
+
+---
+
+## 2026-08-26 16:41:57 +0200 — `eba8fec`
+**Fix common greetings in en/cs/ru misdetected as unrelated languages**
+
+`langdetect` is unreliable on short text generally, but greetings are a specific, verified
+production bug: `detect("hello") == "fi"`, `detect("hi") == "sw"`, `detect("hey") == "so"`,
+`detect("ahoj") == "so"`, `detect("привет") == "mk"` — none of these detect as their actual
+language, so a plain "hello" fell through to the hardcoded `"uk"` default and the bot replied in
+Ukrainian to an English greeting. Live in production; found via manual testing right after deploy.
+
+Fix: extended the existing `_SHORT_WORDS_MAP` fast path (already used for так/ні/yes/no/ano/ne/
+да/нет) to cover common greetings in all 4 supported languages, verified against real `langdetect`
+output for each. Also strips trailing punctuation before the fast-path lookup so "Hello!" hits it
+too, not just the bare word. Regression test added (`tests/test_language_detection.py`).
+
+---
+
+## 2026-08-26 16:31:32 +0200 — `f5dc018`
+**Log timestamps in Prague time, allowlist checkpoint types, commit poetry.lock**
+
+- `logger.py`: `structlog`'s `TimeStamper` defaulted to UTC (2h behind Prague in summer), read as
+  wrong in production logs. Custom processor now uses the same `ZoneInfo("Europe/Prague")` pattern
+  already used for booking emails.
+- `graph.py`: `MemorySaver`'s default `JsonPlusSerializer` warned on every checkpoint
+  serialize/deserialize of `IncomingMessage`/`Route` ("unregistered type... will be blocked in a
+  future version"). Explicitly allowlisted both.
+- `poetry.lock` is no longer gitignored and is now committed: every deploy was re-resolving
+  dependency versions from scratch with no pin, which is how `langgraph` silently moved to a
+  version that introduced the msgpack warning above with zero code change on our end.
+
+---
+
+## 2026-08-26 14:29:08 +0200 — `219e10d` (14 commits, `bb8fdb1..219e10d`)
+**Replace the 6-node supervisor/info/lead_capture/escalation/off_topic/call_timing graph with gate/chat/lead_capture**
+
+Full plan: `docs/superpowers/plans/2026-08-26-conversational-graph-refactor.md`.
+
+- `gate` (binary lead-intent classifier) replaces the old 5-way `supervisor` classifier.
+- `chat` (one LLM node, bound to a single `log_unanswered_question` tool) replaces
+  `info`/`off_topic`/`escalation`/`call_timing`. Grounded entirely in a new single source of
+  truth, `src/assets/company_info.md` (services, pricing, required documents, contact/office/
+  hours, FAQ, in en/uk/cs/ru), read fresh from disk on every turn — no reload/restart needed to
+  edit it.
+- `lead_capture`'s state machine is unchanged, apart from 3 `Route.INFO` → `Route.CHAT` renames.
+- Fixed a real production bug along the way: `lead_capture`'s exit-edge map routed `Route.LEAD`
+  back to `lead_capture` itself, causing a same-turn self-loop and `GraphRecursionError` whenever
+  a step reprompted or advanced (e.g. every message like "Зателефонуйте мені" that didn't look
+  like a valid name/phone/email — this was the original bug report that started this work). Now
+  maps to `END`; the next real message resumes the form via `gate`'s own active-form check. Pinned
+  with a regression test.
+- Retired the pgvector knowledge-base pipeline (`KnowledgeStore`, `embeddings.py`,
+  `faq_loader.py`, `assets/faq.yaml`, the `langchain-postgres` dependency) — it was already
+  non-functional (`load_faq()` was never called from anywhere in the codebase, so the KB was very
+  likely always empty in production).
+- Added a test suite from scratch (pytest + pytest-asyncio; this repo had none before).
+
+Built via subagent-driven development in an isolated worktree, with per-task review and a final
+whole-branch review before merge.
+
+---
+
 ## 2026-08-26 10:12:58 +0200 — `8fbe0f9`
 **Fix info_agent returning wrong state keys, correct CLAUDE.md**
 

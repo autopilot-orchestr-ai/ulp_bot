@@ -30,7 +30,7 @@
 1. Legal Consultations
    - 30 min (online only): 1,900 CZK
    - 60 min (online or in-person): 3,300 CZK
-   - With JUDr. Ulyana Kurivchakova: 60 min (in-person only) — 5,000 CZK
+   - With JUDr. Ulyana Kurivchakova: 60 min (online or in-person) — 5,000 CZK
    - Booking is confirmed only after full prepayment.
 
 2. Visa / Migration Consultations
@@ -111,7 +111,7 @@
 1. Юридичні консультації
    - 30 хв (тільки онлайн): 1 900 CZK
    - 60 хв (онлайн або офлайн): 3 300 CZK
-   - З JUDr. Уляною Курівчаковою: 60 хв (тільки очно) — 5 000 CZK
+   - З JUDr. Уляною Курівчаковою: 60 хв (онлайн або очно) — 5 000 CZK
    - Запис підтверджується лише після повної передоплати.
 
 2. Візові консультації
@@ -192,7 +192,7 @@
 1. Právní konzultace
    - 30 min (pouze online): 1 900 Kč
    - 60 min (online nebo osobně): 3 300 Kč
-   - S JUDr. Uljanou Kurivčakovou: 60 min (pouze osobně) — 5 000 Kč
+   - S JUDr. Uljanou Kurivčakovou: 60 min (online nebo osobně) — 5 000 Kč
    - Rezervace je potvrzena až po úplné platbě předem.
 
 2. Vízové konzultace
@@ -273,7 +273,7 @@
 1. Юридические консультации
    - 30 мин (только онлайн): 1 900 CZK
    - 60 мин (онлайн или очно): 3 300 CZK
-   - С JUDr. Ульяной Куривчаковой: 60 мин (только очно) — 5 000 CZK
+   - С JUDr. Ульяной Куривчаковой: 60 мин (онлайн или очно) — 5 000 CZK
    - Запись подтверждается только после полной предоплаты.
 
 2. Визовые консультации

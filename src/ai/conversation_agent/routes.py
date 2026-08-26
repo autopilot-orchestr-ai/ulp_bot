@@ -8,3 +8,4 @@ class Route(str, Enum):
     HUMAN = "human"
     OFF_TOPIC = "off_topic"
     CALL_TIMING = "call_timing"
+    CHAT = "chat"

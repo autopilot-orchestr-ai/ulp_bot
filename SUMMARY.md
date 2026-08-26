@@ -4,6 +4,21 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-26 22:21:39 +0200 — `5880de1`
+**Prompt fix: chat was summarizing service options down to 1-2, omitting real priced variants**
+
+User reported: asking "Potřebuju právníka" (a general need-statement) got a reply listing only
+the 2 standard consultation durations, omitting the JUDr. Ulyana Kurivchakova option that's
+equally present in `company_info.md`. The data was correct (just fixed in the previous entry);
+the LLM chose to summarize rather than enumerate.
+
+Added an explicit business rule to `prompts/chat.py`: when discussing a service with multiple
+priced options, list every variant with its own price, even for a general query. This is
+prompt-following, not deterministic logic — can't be meaningfully unit tested, needs a live
+retest of the same query to confirm it actually changed the model's behavior.
+
+---
+
 ## 2026-08-26 22:10:28 +0200 — `3307e1c`
 **Content correction: JUDr. Ulyana Kurivchakova consultations are online or in-person, not in-person only**
 

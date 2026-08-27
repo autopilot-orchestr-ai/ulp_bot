@@ -4,6 +4,39 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 08:33:04 +0200 — `1cd05ad`
+**Three production bugs from live Czech/Ukrainian testing of the redesigned lead-capture flow**
+
+Found by testing the just-deployed lead-capture redesign directly against the bot:
+
+- **Czech name capture looped forever.** `is_valid_name` hard-rejected any answer over 4
+  words *before validation even ran*, so a natural sentence like "Moje jméno je Alex
+  Test" never reached the LLM check at all - phone/email capture already tolerate full
+  sentences via regex-search, name capture didn't. Added `strip_name_preamble()`
+  (en/uk/ru/cs) and applied it both before validation and before storing `client_name`.
+  Separately, the LLM name-validity prompt was too strict and inconsistent - it rejected
+  "Alex test" / "Alex Vrn" while accepting the identical pattern in another language
+  ("Саша Тест") moments later - loosened the prompt to be explicitly lenient, since a
+  false rejection loses a real lead while a false acceptance just means an odd-looking
+  name in the manager's inbox.
+- **Valid emails were being rejected.** `extract_email` rejected any address whose local
+  part had 6+ consecutive consonants (meant to catch keyboard-mashing like
+  "asdfgh@x.com"), but it also rejected real addresses like `Vrnlsn@pm.me` - especially
+  bad for this client base, since transliterated Slavic surnames cluster consonants
+  often. Removed the heuristic; the existing syntax + domain checks are sufficient.
+- **The weekend call-timing notice didn't fire for "Call me on Saturday."** Two
+  compounding gaps in `is_asking_call_timing`: the call-word list only covered the
+  теlefон/звон verb families ("зателефону", "позвон"), missing the separate Ukrainian
+  дзвон root ("подзвоніть", "передзвоніть") entirely; and the check required an explicit
+  "when"-word even when a weekend day was already named in the same message. Both fixed
+  - a call/contact request that names a weekend day now gets the office-hours +
+  weekend-closure notice without needing to also ask "when".
+
+110 tests pass (91 + 19 new, across three new test files: `test_call_timing.py`,
+`test_email.py`, `test_name_preamble.py`).
+
+---
+
 ## 2026-08-27 07:55:24 +0200 — `6300779`
 **Lead-capture flow redesign + final-review fix round (Czech pricing detection was completely broken)**
 

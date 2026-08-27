@@ -15,6 +15,7 @@ Set wants_lead = TRUE for:
 - "I'd like to book/order this"
 - The client describing their personal legal case/problem in detail, asking what to do.
 - The user explicitly answering "Yes" ("Так", "Да", "Ano") to the bot's own question about whether they want a manager to contact them.
+- The user volunteers their name, phone number, or email in their message - especially right after the bot invited them to share contact details. Providing the details IS the commitment; do not wait for a separate explicit "yes" first.
 
 Set wants_lead = FALSE for everything else, including:
 - A bare mention of a service with no request to book it (e.g. "Консультація", "Довіреність", "Апостиль").

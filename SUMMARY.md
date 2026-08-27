@@ -4,6 +4,44 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 07:55:24 +0200 — `6300779`
+**Lead-capture flow redesign + final-review fix round (Czech pricing detection was completely broken)**
+
+Branch `lead-capture-flow-redesign`: reworked the lead-capture funnel so a bare
+"consultation" request is disambiguated (legal vs. visa/migration) before pricing is
+shown, and — once pricing has been shown — the bot asks an explicit
+yes/no "would you like our manager to contact you?" confirmation gate before it starts
+collecting name/phone/email, instead of jumping straight into the form. Also added a
+universal call-timing fast-path ("when will you call me?") wired into both `chat` and
+`lead_capture`, which now prepends a weekend-office-hours notice when asked on a
+Saturday/Sunday.
+
+This commit is the final whole-branch review's fix round on top of that redesign,
+covering four issues:
+
+- **Czech pricing was never detected as shown, blocking 100% of Czech-language leads.**
+  `FormValidator.has_price_been_shown` only matched the literal substring `"CZK"`, but
+  `company_info.md`'s Czech section quotes every price in `Kč`, never `CZK` — so the
+  confirmation gate above was never reached for Czech conversations, and the funnel
+  looped forever re-explaining pricing instead of ever asking for a name. Fixed to match
+  case-insensitively against both `"czk"` and `"kč"`.
+- `SERVICE_LOCALIZED_NAMES` had no entry for `consultation_ambiguous`, leaking the raw
+  internal ID to clients and to the manager's Telegram alert. Added localized names for
+  all 4 languages.
+- `CONTACT_CONFIRMATION_PROMPT` told users to reply "Yes" with their name and phone
+  number, but the handler only accepts a bare yes/no — a compliant reply got stuck in a
+  reprompt loop. Dropped the mismatched instruction from all 4 languages.
+- The shared affirmative/negative word lists (`affirmation.py`) were a fail-soft
+  optimization in `gate.py` but are now also load-bearing at the confirmation gate above,
+  a fail-hard position: common affirmatives ("ok", "добре", "sure", …) were missing
+  entirely, and `is_negative`'s prefix matching false-positived on Czech "nevím"/"nemám
+  čas" (both start with "ne"), silently wiping the user's in-progress form. Widened the
+  affirmative word set and switched `is_negative` to whole-first-token matching.
+
+91 tests pass (85 pre-existing + 6 new regression tests for this fix round).
+
+---
+
 ## 2026-08-26 22:32:25 +0200 — `277ff3c`
 **Policy: manager is only notified for explicit human requests or completed leads, not for hostility alone**
 

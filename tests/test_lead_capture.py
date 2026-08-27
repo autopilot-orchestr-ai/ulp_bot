@@ -33,10 +33,13 @@ async def test_step_awaiting_email_reprompts_without_crashing_on_invalid_email()
     the whole graph invocation uncaught. Because the crash happened before
     notify_manager_lead_telegram (only called in the success branch below),
     a fully-captured lead (name + phone already collected in prior turns)
-    was silently dropped - the manager was never notified. Triggered by a
-    gibberish test email ("fajksdfdfg@gh.com") that FormValidator.extract_email
-    correctly rejects via its consonant-run heuristic."""
-    state = _state("fajksdfdfg@gh.com", client_name="Alex Test", client_phone="5678372654")
+    was silently dropped - the manager was never notified. Triggered here by
+    an email with a single-letter TLD ("test@x.c") - extract_email's regex
+    requires a 2-10 letter TLD, so this still doesn't match at all. (A
+    separate 2026-08-27 fix removed extract_email's consonant-run heuristic
+    entirely: it was rejecting real emails like "Vrnlsn@pm.me" as false
+    positives - see test_email.py.)"""
+    state = _state("test@x.c", client_name="Alex Test", client_phone="5678372654")
     with _mock_hostility_llm():
         result = await _step_awaiting_email(state)  # must not raise
     assert result["response"]
@@ -44,7 +47,7 @@ async def test_step_awaiting_email_reprompts_without_crashing_on_invalid_email()
 
 
 async def test_step_awaiting_email_reprompt_is_language_aware():
-    state = _state("fajksdfdfg@gh.com", language="uk")
+    state = _state("test@x.c", language="uk")
     with _mock_hostility_llm():
         result = await _step_awaiting_email(state)
     assert "адрес" in result["response"].lower()  # Ukrainian EMAIL_REPROMPT wording, not the English one

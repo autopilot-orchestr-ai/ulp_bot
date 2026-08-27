@@ -14,8 +14,36 @@ from src.ai.llm import get_llm
 from langchain_core.messages import HumanMessage
 from src.config import settings
 
+# "My name is X" / "Jmenuji se X" style preambles: users answering the name
+# prompt in a full sentence rather than a bare name is normal and legitimate
+# (phone/email capture already tolerate this via regex-search-anywhere-in-text;
+# name capture didn't, and a 2026-08-27 production test hit exactly this - a
+# 5-word Czech sentence was hard-rejected by the word-count gate before ever
+# reaching validation).
+NAME_PREAMBLE_PATTERNS = [
+    r"^(my name is|i am|i'm)\s+",
+    r"^(мене звати|моє ім'я(?:\s+це)?)\s+",
+    r"^(меня зовут|моё имя(?:\s+это)?|мое имя(?:\s+это)?)\s+",
+    r"^(jmenuji se|moje jméno je|moje jmeno je)\s+",
+]
+
+
 class FormValidator:
     """Production-grade validator for lead collection form steps."""
+
+    @staticmethod
+    def strip_name_preamble(text: str) -> str:
+        """Strip a leading "my name is" / "jmenuji se" / "мене звати" style
+        preamble so a natural-sentence answer validates the same as a bare
+        name would. Idempotent - safe to call on already-stripped text."""
+        if not text:
+            return text
+        stripped_input = text.strip()
+        for pattern in NAME_PREAMBLE_PATTERNS:
+            stripped = re.sub(pattern, "", stripped_input, flags=re.IGNORECASE).strip()
+            if stripped != stripped_input:
+                return stripped
+        return stripped_input
 
     @staticmethod
     def get_val(obj: Any, key: str, default: Any = None) -> Any:
@@ -96,8 +124,8 @@ Reply ONLY with "TRUE" if it's a question, or "FALSE" if it's a statement/answer
     async def is_valid_name(cls, text: str) -> bool:
         if not text:
             return False
-            
-        text = text.strip()
+
+        text = cls.strip_name_preamble(text)
         text_lower = text.lower()
 
         if await cls.is_profanity_or_hostile(text_lower):
@@ -119,8 +147,13 @@ Reply ONLY with "TRUE" if it's a question, or "FALSE" if it's a statement/answer
         if not re.fullmatch(r'[A-Za-zА-Яа-яІіЇїЄєҐґĚŠČŘŽÝÁÍÉÓÚŮĎŤŇěščřžýáíéóúůďťň\s\-\']+', text):
             return False
 
-        prompt = f"""You are a strict data validation assistant. 
-Check if this text is a valid human name (First, Last, or both).
+        prompt = f"""You are a lenient data validation assistant for a lead-capture form.
+Your job is to catch obvious junk, not to gatekeep real names. Accept any text
+that could plausibly be a person's name - informal names, nicknames, single
+first names, and short or unusual-looking names should all be accepted, in
+any of Ukrainian, Russian, Czech, or English. Only reply FALSE if the text is
+clearly NOT a name: spam, a random string of characters, a phrase unrelated to
+naming, or profanity.
 Text: "{text}"
 Reply ONLY with TRUE or FALSE."""
 
@@ -161,10 +194,7 @@ Reply ONLY with TRUE or FALSE."""
             return None
 
         email = match.group(0).lower()
-        prefix, domain = email.split('@', 1)
-
-        if re.search(r'[bcdfghjklmnpqrstvwxyz]{6,}', prefix):
-            return None
+        domain = email.split('@', 1)[1]
 
         if '.' not in domain or len(domain.split('.')[-1]) < 2:
             return None
@@ -179,13 +209,23 @@ Reply ONLY with TRUE or FALSE."""
 
     @staticmethod
     def is_asking_call_timing(text: str) -> bool:
-        """"When will you call me?" style question, usable both inside and outside the lead form."""
+        """"When will you call me?" question, or a call/contact request pinned
+        to a weekend day (e.g. "call me on Saturday") - both need the same
+        office-hours + weekend-closure answer. Usable both inside and outside
+        the lead form."""
         if not text:
             return False
         text_lower = text.lower()
         has_time = any(k in text_lower for k in ["коли", "when", "kdy", "во сколько"])
-        has_call = any(k in text_lower for k in ["зателефону", "call", "zavol", "позвон", "зв'яж", "kontakt"])
-        return has_time and has_call
+        has_call = any(
+            k in text_lower
+            for k in ["зателефону", "дзвон", "call", "zavol", "позвон", "зв'яж", "kontakt"]
+        )
+        if has_time and has_call:
+            return True
+        # A call/contact request naming a weekend day implicitly asks about
+        # timing too, even without an explicit "when".
+        return has_call and FormValidator.has_weekend_mention(text)
 
     @staticmethod
     def has_price_been_shown(history: List[Dict], lookback: int = 6) -> bool:

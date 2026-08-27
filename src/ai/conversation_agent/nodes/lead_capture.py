@@ -238,7 +238,7 @@ async def _step_awaiting_name(state: AgentState) -> dict:
             "route_to_llm": True,
         }
 
-    name = state.incoming.text.strip()
+    name = FormValidator.strip_name_preamble(state.incoming.text.strip())
 
     if not await FormValidator.is_valid_name(name):
         return {

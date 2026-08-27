@@ -91,6 +91,38 @@ async def notify_manager_contacts_telegram(user: User, user_text: str) -> None:
     )
 
 
+async def notify_manager_human_request_telegram(
+    client_id: str,
+    client_name: str | None,
+    text: str,
+    lang: str = "uk",
+) -> None:
+    """Notify manager immediately when a client explicitly asks to be
+    contacted by a human, before the name/phone/email form is even filled
+    in - contact details aren't known yet at this point, so staff need to
+    open the chat themselves to respond. Complements
+    notify_manager_lead_telegram, which fires later with full contact
+    details once (and if) the client completes the form."""
+    chat_id = getattr(settings, "staff_telegram_chat_id", None) or getattr(settings, "STAFF_TELEGRAM_CHAT_ID", None)
+    if not chat_id:
+        return
+
+    from src.bots.tgbot.bot import bot  # lazy import — breaks the cycle
+
+    await bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"🙋 <b>[ЗАПИТ НА ЗВ'ЯЗОК] Клієнт хоче, щоб з ним зв'язались</b>\n\n"
+            f"🆔 <b>Client ID:</b> <code>{client_id}</code>\n"
+            f"📛 <b>Ім'я:</b> {client_name or 'Not specified'}\n"
+            f"🌐 <b>Мова:</b> {lang.upper()}\n"
+            f"💬 <b>Повідомлення:</b> <i>\"{text}\"</i>\n\n"
+            f"👉 <i>Контактні дані ще не зібрані - можливо, варто написати клієнту самостійно.</i>"
+        ),
+        parse_mode="HTML",
+    )
+
+
 async def notify_manager_aggressive_telegram(
     client_id: str,
     client_name: str | None,

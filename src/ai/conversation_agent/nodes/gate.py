@@ -10,8 +10,25 @@ from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.state import AgentState
 from src.ai.llm import get_llm
 from src.bots.utils.language_detection import detect_lang
+from src.bots.utils.notify_stuff import notify_manager_human_request_telegram
 from src.config import settings
 from src.logger import log_event
+
+
+async def _notify_human_request(state: AgentState, lang: str, reason: str) -> None:
+    """Best-effort, non-blocking: a failed Telegram send must never break the
+    conversation turn for the client (unlike notify_manager_lead_telegram's
+    call in lead_capture.py, this one is deliberately guarded)."""
+    try:
+        await notify_manager_human_request_telegram(
+            client_id=state.incoming.client_id,
+            client_name=state.client_name,
+            text=state.incoming.text,
+            lang=lang,
+        )
+        log_event("human_request_notified", status="ok", reason=reason)
+    except Exception as exc:
+        log_event("human_request_notified", status="error", reason=reason, error=str(exc))
 
 _MANAGER_PROMPT_MARKERS = [
     "(ano / ne)", "(yes / no)", "(так / ні)", "(да / нет)",
@@ -28,6 +45,17 @@ class LeadGateClassification(BaseModel):
             "asking for advice on it. False for everything else, including a "
             "bare mention of a service or a general question about it."
         )
+    )
+    explicit_human_request: bool = Field(
+        default=False,
+        description=(
+            "True specifically when the user explicitly asks to speak with a "
+            "human, wants the manager/team to contact them, or is frustrated "
+            "or insistent about being reached - as opposed to just wanting to "
+            "book a specific service or describing their case for advice. "
+            "This is a stronger, more urgent signal than wants_lead alone: it "
+            "should only be true when wants_lead is also true."
+        ),
     )
     is_aggressive: bool = Field(
         default=False,
@@ -71,6 +99,7 @@ async def classify_lead_intent(state: AgentState) -> dict:
 
     if is_affirmative_reply_to_manager_prompt(state.incoming.text, state.conversation_history):
         log_event("gate_classified", status="forced_lead", reason="user_confirmed_manager")
+        await _notify_human_request(state, lang, reason="confirmed_manager_prompt")
         return {"intent": "lead", "route": Route.LEAD, "language": lang}
 
     llm = get_llm(settings.llm_model)
@@ -96,6 +125,7 @@ async def classify_lead_intent(state: AgentState) -> dict:
         "gate_classified",
         status="ok",
         wants_lead=result.wants_lead,
+        explicit_human_request=result.explicit_human_request,
         is_aggressive=result.is_aggressive,
         language=lang,
     )
@@ -106,6 +136,14 @@ async def classify_lead_intent(state: AgentState) -> dict:
     # hostility alone.
     if result.is_aggressive:
         log_event("aggressive_message_flagged", status="ok", text=state.incoming.text)
+
+    # Per user policy (2026-08-27): an explicit request for a human should
+    # reach staff immediately, not only once the full name/phone/email form
+    # is completed minutes later - contact details aren't known yet here,
+    # so notify_manager_human_request_telegram just flags the conversation
+    # for staff to pick up themselves.
+    if result.wants_lead and result.explicit_human_request:
+        await _notify_human_request(state, lang, reason="gate_classified_explicit")
 
     return {
         "intent": "lead" if result.wants_lead else "chat",

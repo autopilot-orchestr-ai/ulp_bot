@@ -73,15 +73,19 @@ entry point all bots funnel through** (so a future WhatsApp/Instagram bot — st
 `src/ai/conversation_agent/` implements a LangGraph state machine (`AgentState` in `state.py`) with three
 nodes:
 
-- **`gate`** (`nodes/gate.py`, `classify_lead_intent`) — the entry node. A binary classifier, not a 5-way
-  one: it decides only `wants_lead` (clear commitment to proceed, or an explicit request for a human) via
-  one LLM structured-output call. Also flags `is_aggressive` (hostile/profane messages) for logging only —
-  per user policy (2026-08-26), the manager is only ever notified on Telegram for an explicit human request
-  or a completed lead with contact details, never for hostility alone; see "Staff notifications" below. Two
-  cheap intercepts run first: if a lead-capture form is already active (`lead_step` set, not `"completed"`),
-  the LLM call is skipped entirely (`routing.py::route_after_gate` sends the turn straight to `lead_capture`
-  regardless of what `gate` returns); a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply
-  immediately after the bot itself asked "want us to contact you?", without a model call.
+- **`gate`** (`nodes/gate.py`, `classify_lead_intent`) — the entry node. Not a 5-way classifier: it decides
+  `wants_lead` (clear commitment to proceed, or an explicit request for a human) via one LLM structured-output
+  call, plus two narrower flags on the same call — `explicit_human_request` (true only for the "wants a
+  human/is frustrated about being reached" subset of `wants_lead`, not an ordinary service booking) and
+  `is_aggressive` (hostile/profane messages, logging only). Per user policy (2026-08-26), the manager is only
+  ever notified on Telegram for an explicit human request or a completed lead with contact details, never for
+  hostility alone — see "Staff notifications" below for how the *explicit human request* half of that policy
+  is actually wired (it wasn't, until 2026-08-27; `gate.py` previously only decided routing, and no code path
+  notified staff before the full name/phone/email form completed). Two cheap intercepts run first: if a
+  lead-capture form is already active (`lead_step` set, not `"completed"`), the LLM call is skipped entirely
+  (`routing.py::route_after_gate` sends the turn straight to `lead_capture` regardless of what `gate` returns);
+  a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply immediately after the bot itself asked
+  "want us to contact you?", without a model call — this shortcut also notifies staff directly (see below).
 - **`lead_capture`** (`nodes/lead_capture.py`) — unchanged in spirit, but the pre-name-collection
   sequence was redesigned 2026-08-27 after real client feedback: a detected service now goes through
   `awaiting_consultation_type` (only for an ambiguous bare "consultation" — disambiguates legal vs.
@@ -126,12 +130,22 @@ message, add it to all four languages there rather than inlining a new string in
 ### Staff notifications
 
 `src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts directly via the aiogram `bot` instance,
-imported lazily inside each function to avoid a circular import with `src/bots/tgbot/bot.py`. Two functions
-are actually wired up: `notify_manager_lead_telegram` (called from `nodes/lead_capture.py`'s completion step —
-an explicit human request or a completed lead with contact details) and `notify_manager_media_telegram`
-(called from `bots/tgbot/handlers/message.py` on any non-text message). Per user policy (2026-08-26), hostile
-messages are logged (`gate.py`'s `is_aggressive`) but no longer ping the manager — `notify_manager_aggressive_telegram`
-still exists in this file but nothing calls it anymore. `notify_manager_contacts_telegram` has never had a
-caller (pre-existing, unrelated to that change). `notify_manager_lead_telegram`'s call in `lead_capture.py` is
-**not** try/except-guarded and runs before the "thank you" response is built — if that Telegram send fails,
-the client who just finished the form gets no confirmation message at all, not even a generic error.
+imported lazily inside each function to avoid a circular import with `src/bots/tgbot/bot.py`. Four functions
+are actually wired up:
+- `notify_manager_lead_telegram` — called from `nodes/lead_capture.py`'s completion step, once the full
+  name/phone/email form is done. **Not** try/except-guarded and runs before the "thank you" response is
+  built — if that Telegram send fails, the client who just finished the form gets no confirmation message at
+  all, not even a generic error (pre-existing, unrelated to the notification added below).
+- `notify_manager_human_request_telegram` (added 2026-08-27) — called from `nodes/gate.py`'s
+  `classify_lead_intent`, both from the LLM classification path (`wants_lead and explicit_human_request`) and
+  the deterministic "yes" shortcut (`is_affirmative_reply_to_manager_prompt`). Fires immediately when a client
+  explicitly wants a human to reach out — before any contact details are known, so the message just flags the
+  conversation for staff to open themselves. Complements `notify_manager_lead_telegram` above: a client can
+  trigger both (an early heads-up here, then the full-detail one later if they complete the form) — this is
+  intentional, not deduplicated. Deliberately wrapped in try/except in `gate.py` (`_notify_human_request`) so
+  a failed Telegram send never breaks the conversation turn for the client, unlike the unguarded call above.
+- `notify_manager_media_telegram` — called from `bots/tgbot/handlers/message.py` on any non-text message.
+
+Per user policy (2026-08-26), hostile messages are logged (`gate.py`'s `is_aggressive`) but no longer ping the
+manager — `notify_manager_aggressive_telegram` still exists in this file but nothing calls it anymore.
+`notify_manager_contacts_telegram` has never had a caller (pre-existing, unrelated to either change above).

@@ -127,3 +127,82 @@ async def test_classify_lead_intent_does_not_notify_manager_for_aggression_alone
         result = await classify_lead_intent(state)
     assert result["route"] == Route.CHAT
     assert not hasattr(gate_module, "notify_manager_aggressive_telegram")
+
+
+# --- Per user policy (2026-08-27): notify staff immediately for an explicit
+# human request, before the name/phone/email form is even filled in ---
+
+async def test_classify_lead_intent_notifies_manager_for_explicit_human_request():
+    state = _state("Так куди ви подзвоните якщо у вас нема мого номера?")
+    fake_structured = MagicMock()
+    fake_structured.ainvoke = AsyncMock(
+        return_value=LeadGateClassification(
+            wants_lead=True, explicit_human_request=True, is_aggressive=False
+        )
+    )
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm), patch(
+        "src.ai.conversation_agent.nodes.gate.notify_manager_human_request_telegram",
+        new_callable=AsyncMock,
+    ) as notify:
+        result = await classify_lead_intent(state)
+    notify.assert_awaited_once()
+    assert result["route"] == Route.LEAD
+
+
+async def test_classify_lead_intent_does_not_notify_for_ordinary_service_booking():
+    """wants_lead=True alone (e.g. booking a specific service) must not
+    trigger the immediate notify - only the narrower explicit_human_request
+    signal does, to avoid pinging staff before there's anything urgent."""
+    state = _state("Хочу замовити довіреність")
+    fake_structured = MagicMock()
+    fake_structured.ainvoke = AsyncMock(
+        return_value=LeadGateClassification(
+            wants_lead=True, explicit_human_request=False, is_aggressive=False
+        )
+    )
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm), patch(
+        "src.ai.conversation_agent.nodes.gate.notify_manager_human_request_telegram",
+        new_callable=AsyncMock,
+    ) as notify:
+        result = await classify_lead_intent(state)
+    notify.assert_not_awaited()
+    assert result["route"] == Route.LEAD
+
+
+async def test_classify_lead_intent_notifies_on_affirmative_reply_shortcut():
+    history = [{"role": "assistant", "content": "contact you? (yes / no)"}]
+    state = _state("yes", history=history)
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm") as get_llm, patch(
+        "src.ai.conversation_agent.nodes.gate.notify_manager_human_request_telegram",
+        new_callable=AsyncMock,
+    ) as notify:
+        result = await classify_lead_intent(state)
+    get_llm.assert_not_called()
+    notify.assert_awaited_once()
+    assert result["route"] == Route.LEAD
+
+
+async def test_classify_lead_intent_survives_a_failed_notify():
+    """A Telegram send failure must never break the conversation turn for
+    the client - unlike notify_manager_lead_telegram's unguarded call in
+    lead_capture.py, this one is deliberately try/except-wrapped."""
+    state = _state("Зателефонуйте мені, будь ласка")
+    fake_structured = MagicMock()
+    fake_structured.ainvoke = AsyncMock(
+        return_value=LeadGateClassification(
+            wants_lead=True, explicit_human_request=True, is_aggressive=False
+        )
+    )
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm), patch(
+        "src.ai.conversation_agent.nodes.gate.notify_manager_human_request_telegram",
+        new_callable=AsyncMock,
+        side_effect=Exception("Telegram is down"),
+    ):
+        result = await classify_lead_intent(state)  # must not raise
+    assert result["route"] == Route.LEAD

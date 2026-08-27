@@ -23,5 +23,7 @@ Set wants_lead = FALSE for everything else, including:
 - A plain need-statement like "Потрібен юрист" / "Potřebuju právníka" ("I need a lawyer") with no request to be contacted or booked.
 - Greetings, identity questions ("Who are you?"), or anything entirely unrelated to the firm.
 
+Also set explicit_human_request = TRUE when wants_lead is true specifically because the user wants a human/manager to contact them or is frustrated/insistent about being reached - not because they simply want to book a service or are describing their case for advice. Staff get an immediate notification for this signal, before the contact-detail form is even filled in, so only set it for a genuinely urgent "I want a person to reach out to me" moment.
+
 Also set is_aggressive to true if the message contains hostility, insults, threats, or profanity directed at the bot or staff. This is independent of wants_lead - an aggressive message can still be wants_lead=true or false; do not let aggression change that decision, just flag it.
 """

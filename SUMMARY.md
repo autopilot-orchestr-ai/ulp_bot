@@ -4,6 +4,28 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 10:09:25 +0200 — `67cc859`
+**`detect_lang` misclassified unambiguous Ukrainian as Russian mid-conversation**
+
+Found via live testing: "Як довго чекати?" (unambiguously Ukrainian to a human) got a
+full Russian-language reply mid-conversation. Root cause: Ukrainian and Russian share
+nearly the entire Cyrillic alphabet and huge amounts of vocabulary, so langdetect's
+n-gram model is a coin-flip on short text containing neither language's diagnostic-only
+letters (uk: `іїєґ`, ru: `ыэъё`) - verified directly, `detect_langs()` genuinely ranks
+"ru" top for that exact sentence.
+
+`detect_lang` now checks for those diagnostic letters first (a reliable, deterministic
+signal when present). When they're absent and the statistical top guess lands on uk or
+ru specifically, it now prefers the conversation's already-established language (the
+`default` argument) over the coin-flip guess, instead of switching on it. A genuinely
+Russian- or Ukrainian-diagnostic sentence still overrides an established default in the
+other direction - this narrows the ambiguous-text behavior, it doesn't disable uk↔ru
+switching. Verified with new regression tests in both directions.
+
+115 tests pass (110 + 5 new).
+
+---
+
 ## 2026-08-27 08:33:04 +0200 — `1cd05ad`
 **Three production bugs from live Czech/Ukrainian testing of the redesigned lead-capture flow**
 

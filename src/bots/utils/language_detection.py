@@ -27,6 +27,24 @@ _SHORT_WORDS_MAP = {
     "привет": "ru",
 }
 
+# Ukrainian and Russian share nearly the entire Cyrillic alphabet and a huge
+# amount of vocabulary, so langdetect's statistical n-gram model is a
+# coin-flip on text that contains neither language's diagnostic-only
+# letters (verified in production: "Як довго чекати?" - unambiguously
+# Ukrainian to a human - statistically detects as "ru"). These letter sets
+# each exist in only one of the two alphabets, so their presence is a
+# reliable, deterministic signal; their absence means genuine ambiguity.
+_UK_DIAGNOSTIC_CHARS = set("іїєґІЇЄҐ")
+_RU_DIAGNOSTIC_CHARS = set("ыэъёЫЭЪЁ")
+
+
+def _uk_ru_diagnostic_signal(text: str) -> str | None:
+    if any(ch in _UK_DIAGNOSTIC_CHARS for ch in text):
+        return "uk"
+    if any(ch in _RU_DIAGNOSTIC_CHARS for ch in text):
+        return "ru"
+    return None
+
 
 def is_meaningful_text(text: str) -> bool:
     if not text:
@@ -60,12 +78,28 @@ def detect_lang(text: str, default: str = "uk") -> str:
         # support is strictly better than defaulting whenever the top-1
         # guess happens to miss - it only changes the outcome when the top
         # guess isn't in SUPPORTED_LANGUAGES to begin with.
-        for candidate in detect_langs(text):
-            if candidate.lang in SUPPORTED_LANGUAGES:
-                return candidate.lang
-        return default
+        top = next(
+            (c.lang for c in detect_langs(text) if c.lang in SUPPORTED_LANGUAGES),
+            None,
+        )
     except LangDetectException:
+        top = None
+
+    if top is None:
         return default
+
+    if top in ("uk", "ru"):
+        # The one pair langdetect confuses in practice. Only trust the
+        # statistical guess when the text actually contains that language's
+        # diagnostic letters; otherwise keep the conversation's established
+        # language (its "default") rather than flip on a coin-toss.
+        signal = _uk_ru_diagnostic_signal(text)
+        if signal:
+            return signal
+        if default in ("uk", "ru"):
+            return default
+
+    return top
 
 def should_redetect_language(text: str, current_lang: str) -> bool:
     """Determines if the text language obviously conflicts with current_lang."""

@@ -71,3 +71,37 @@ def test_detect_lang_falls_back_to_default_when_no_candidate_is_supported():
 def test_detect_lang_falls_back_to_default_for_empty_text():
     assert detect_lang("", default="en") == "en"
     assert detect_lang("   ", default="cs") == "cs"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Regression: a real production message. Ukrainian and Russian share
+        # nearly the entire Cyrillic alphabet, and this sentence contains
+        # none of either language's diagnostic-only letters (і/ї/є/ґ for uk,
+        # ы/э/ъ/ё for ru) - langdetect's statistical model genuinely guesses
+        # "ru" for it, even though it's unambiguously Ukrainian to a human
+        # and the conversation had already established "uk".
+        "Як довго чекати?",
+        "Так куди ви подзвоните якщо у вас нема мого номера?",
+    ],
+)
+def test_detect_lang_prefers_established_language_when_uk_ru_ambiguous(text):
+    assert detect_lang(text, default="uk") == "uk"
+
+
+def test_detect_lang_prefers_established_russian_when_uk_ru_ambiguous():
+    # Same ambiguous-text mechanism, opposite direction: this isn't a
+    # uk-specific hardcode, it preserves whatever language was established.
+    assert detect_lang("Как долго ждать?", default="ru") == "ru"
+
+
+def test_detect_lang_still_switches_to_russian_with_diagnostic_letters():
+    # A genuinely Russian-diagnostic sentence (ы) must still override an
+    # established Ukrainian default - the fix narrows ambiguous-text
+    # behavior, it doesn't disable uk<->ru switching entirely.
+    assert detect_lang("Мы будем рады вам помочь", default="uk") == "ru"
+
+
+def test_detect_lang_still_switches_to_ukrainian_with_diagnostic_letters():
+    assert detect_lang("Дякую, все зрозуміло", default="ru") == "uk"

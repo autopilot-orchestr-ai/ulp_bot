@@ -1,6 +1,7 @@
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
+from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 from src.ai.conversation_agent.nodes.lead_capture import (
     _step_start,
     _step_awaiting_service,
@@ -155,6 +156,27 @@ async def test_step_awaiting_contact_confirmation_unclear_reprompts():
         result = await _step_awaiting_contact_confirmation(state)
     assert result.get("lead_step") is None  # unchanged, caller keeps current step
     assert result.get("route_to_llm") is not True
+
+
+# --- FormValidator.has_price_been_shown: currency detection ---
+
+def test_has_price_been_shown_detects_czech_kc_pricing():
+    # Regression: src/assets/company_info.md's cs section quotes prices in "Kč",
+    # never "CZK" - a case-sensitive "CZK"-only check never fires for Czech
+    # conversations, blocking the lead-capture funnel from ever reaching
+    # awaiting_contact_confirmation for Czech-language users.
+    history = [{"role": "assistant", "content": "Konzultace: 30 min: 1 900 Kč, 60 min: 3 300 Kč"}]
+    assert FormValidator.has_price_been_shown(history) is True
+
+
+def test_has_price_been_shown_still_detects_czk_for_en_uk_ru():
+    history = [{"role": "assistant", "content": "Consultation costs 1900 CZK"}]
+    assert FormValidator.has_price_been_shown(history) is True
+
+
+def test_has_price_been_shown_false_when_no_pricing_mentioned():
+    history = [{"role": "assistant", "content": "Hello, how can I help you today?"}]
+    assert FormValidator.has_price_been_shown(history) is False
 
 
 def test_check_call_timing_prepends_weekend_notice_mid_form():

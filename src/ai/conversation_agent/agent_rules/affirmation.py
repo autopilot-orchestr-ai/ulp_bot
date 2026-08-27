@@ -5,7 +5,12 @@ as lead_capture.py's _SKIP_EMAIL_WORDS, which covers a more specific set
 of "no email" phrasings for a different, unrelated prompt - that stays as
 its own thing."""
 
-AFFIRMATIVE_WORDS = {"ano", "yes", "так", "да", "chci", "y"}
+import re
+
+AFFIRMATIVE_WORDS = {
+    "ano", "yes", "так", "да", "chci", "y", "ok", "okay", "добре", "хочу",
+    "давай", "sure", "jasně", "звичайно", "конечно", "souhlasím",
+}
 NEGATIVE_WORDS = {"ні", "нет", "no", "ne"}
 
 
@@ -16,4 +21,5 @@ def is_affirmative(text: str) -> bool:
 
 def is_negative(text: str) -> bool:
     text_lower = text.lower().strip()
-    return any(text_lower.startswith(w) for w in NEGATIVE_WORDS)
+    tokens = re.findall(r"\w+", text_lower)
+    return bool(tokens) and tokens[0] in NEGATIVE_WORDS

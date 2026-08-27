@@ -190,8 +190,11 @@ Reply ONLY with TRUE or FALSE."""
     @staticmethod
     def has_price_been_shown(history: List[Dict], lookback: int = 6) -> bool:
         """Heuristic gate: only start collecting name/phone/email once the client has actually
-        seen pricing (our FAQ prompt always quotes CZK), per the funnel described in conversation.py."""
+        seen pricing (our FAQ prompt quotes CZK in en/uk/ru and Kč in cs), per the funnel
+        described in conversation.py."""
         for m in reversed(history[-lookback:]):
-            if isinstance(m, dict) and m.get("role") == "assistant" and "CZK" in (m.get("content") or ""):
-                return True
+            if isinstance(m, dict) and m.get("role") == "assistant":
+                content_lower = (m.get("content") or "").lower()
+                if "czk" in content_lower or "kč" in content_lower:
+                    return True
         return False

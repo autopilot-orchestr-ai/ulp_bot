@@ -64,6 +64,7 @@ SERVICE_LOCALIZED_NAMES = {
     "police_clearance": {"uk": "Довідка про несудимість", "ru": "Справка о несудимости", "cs": "Výpis z rejstříku trestů", "en": "Police Clearance Certificate"},
     "marriage": {"uk": "Супровід при одруженні", "ru": "Сопровождение при бракосочетании", "cs": "Asistence při sňatku", "en": "Marriage Support"},
     "duplicates": {"uk": "Дублікати документів", "ru": "Дубликаты документов", "cs": "Duplikáty dokumentů", "en": "Document Duplicates"},
+    "consultation_ambiguous": {"uk": "Консультації", "ru": "Консультации", "cs": "Konzultace", "en": "Consultations"},
 }
 
 QUESTION_PATTERNS = [
@@ -190,10 +191,10 @@ CONSULTATION_TYPE_PROMPT = {
 }
 
 CONTACT_CONFIRMATION_PROMPT = {
-    "en": "Would you like our manager to contact you to arrange this? **Yes** — please leave your name and phone number, or **No**.",
-    "cs": "Přejete si, aby vás kontaktoval náš manažer kvůli vyřízení tohoto požadavku? **Ano** — uveďte prosím své jméno a telefonní číslo, nebo **Ne**.",
-    "uk": "Чи бажаєте, щоб з Вами зв'язався наш менеджер для оформлення запиту? **Так** — залиште, будь ласка, Ваше ім'я та номер телефону, або **Ні**.",
-    "ru": "Хотите, чтобы с Вами связался наш менеджер для оформления запроса? **Да** — оставьте, пожалуйста, Ваше имя и номер телефона, или **Нет**.",
+    "en": "Would you like our manager to contact you to arrange this? **Yes** or **No**.",
+    "cs": "Přejete si, aby vás kontaktoval náš manažer kvůli vyřízení tohoto požadavku? **Ano**, nebo **Ne**.",
+    "uk": "Чи бажаєте, щоб з Вами зв'язався наш менеджер для оформлення запиту? **Так** або **Ні**.",
+    "ru": "Хотите, чтобы с Вами связался наш менеджер для оформления запроса? **Да** или **Нет**.",
 }
 
 CONTACT_DECLINED_MESSAGE = {

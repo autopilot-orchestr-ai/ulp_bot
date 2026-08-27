@@ -4,6 +4,31 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 10:19:23 +0200 — `36cb0fa`
+**Chat replies were repetitive and didn't pivot to asking for contact info**
+
+Found via live testing: after a user pushed back frustrated ("so where will you call if
+you don't have my number?"), the bot just restated that it couldn't reach them and
+repeated the phone number for the third time in four turns, instead of inviting them to
+leave it right there in the chat.
+
+Two coordinated prompt-text changes:
+- `chat.py`'s `SYSTEM_PROMPT`: don't restate a fact (phone/address/hours) already given
+  earlier in the same conversation unless asked again; pivot to inviting the user to
+  share their name/phone in chat instead of repeating a dead end when they're frustrated
+  or confused about how they'll be reached.
+- `gate.py`'s `SYSTEM_PROMPT`: the pivot above would be a dead end on its own - the
+  classifier's `wants_lead=TRUE` examples didn't cover a user simply volunteering a
+  phone number/email/name (as opposed to an explicit "call me" or "yes"), so a reply to
+  the new invite could stay stuck in `chat_node` with nothing to capture it. Added an
+  explicit example: providing contact details IS the commitment, don't wait for a
+  separate explicit yes first.
+
+Pure prompt-text changes, no code paths affected - 115 tests pass unchanged, plus a
+direct `.format()` sanity check on both prompts.
+
+---
+
 ## 2026-08-27 10:09:25 +0200 — `67cc859`
 **`detect_lang` misclassified unambiguous Ukrainian as Russian mid-conversation**
 

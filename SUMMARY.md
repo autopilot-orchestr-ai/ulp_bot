@@ -4,6 +4,33 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 10:29:45 +0200 — `40e167b`
+**Notify manager immediately on an explicit human request, before the form completes**
+
+User-directed: the manager should be notified when a client explicitly wants a
+human/manager to contact them, not only once the full name/phone/email form is
+completed minutes later. This half of the existing 2026-08-26 notification policy was
+never actually wired up - `notify_manager_lead_telegram` only ever fires from
+`lead_capture.py`'s completion step, and pre-existing `is_human_handoff_requested` /
+`HUMAN_HANDOFF_PATTERNS` machinery was dead code, never called from anywhere.
+
+`gate.py`'s `LeadGateClassification` gets a new `explicit_human_request` field - a
+narrower signal than `wants_lead` alone (true only for "wants a human / frustrated
+about being reached", not an ordinary service booking), so staff aren't pinged before
+there's anything urgent. Wired into both the LLM classification path and the
+deterministic "yes"-after-manager-prompt shortcut, via a new
+`notify_manager_human_request_telegram` (no contact details are known yet at this
+point, so it just flags the conversation for staff to open themselves - complements
+the existing full-detail notification, which still fires later if the form completes;
+a client can trigger both by design). Deliberately try/except-wrapped so a failed
+Telegram send never breaks the conversation turn for the client, unlike the existing
+unguarded call in `lead_capture.py`. `CLAUDE.md`'s Staff notifications section
+corrected - it previously described this as already working when it wasn't.
+
+119 tests pass (115 + 5 new).
+
+---
+
 ## 2026-08-27 10:19:23 +0200 — `36cb0fa`
 **Chat replies were repetitive and didn't pivot to asking for contact info**
 

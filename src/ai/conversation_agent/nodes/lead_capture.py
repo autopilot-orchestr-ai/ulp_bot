@@ -14,12 +14,12 @@ from src.ai.conversation_agent.agent_rules.strings import (
     NAME_REPROMPT,
     EMAIL_REPROMPT,
     SERVICES_LIST_RESPONSE,
-    WHEN_WILL_YOU_CALL_RESPONSE,
     SERVICE_LOCALIZED_NAMES,
     CONSULTATION_TYPE_PROMPT,
     CONTACT_CONFIRMATION_PROMPT,
     CONTACT_DECLINED_MESSAGE,
 )
+from src.ai.conversation_agent.prompts.handoff import HANDOFF_MESSAGES
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
 from src.ai.conversation_agent.agent_rules.affirmation import is_affirmative, is_negative
 
@@ -59,7 +59,12 @@ def _service_reprompt(service_id: str, lang: str) -> str:
 async def _check_call_timing(state: AgentState, step: Optional[str]) -> Optional[dict]:
     if not FormValidator.is_asking_call_timing(state.incoming.text):
         return None
-    response = WHEN_WILL_YOU_CALL_RESPONSE.get(state.language, WHEN_WILL_YOU_CALL_RESPONSE["en"])
+    # Per user policy (2026-08-27): this intercept can fire before any
+    # contact details are collected, so it must not promise a callback we
+    # have no way to make - redirect to the firm's own contact channels
+    # instead (the same HANDOFF_MESSAGES chat.py uses), not a "we'll call
+    # you" promise.
+    response = HANDOFF_MESSAGES.get(state.language, HANDOFF_MESSAGES["en"])
     if FormValidator.has_weekend_mention(state.incoming.text):
         response = WEEKEND_NOTICES.get(state.language, WEEKEND_NOTICES["en"]) + response
     return {

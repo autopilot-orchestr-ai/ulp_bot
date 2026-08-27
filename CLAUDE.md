@@ -77,15 +77,16 @@ nodes:
   `wants_lead` (clear commitment to proceed, or an explicit request for a human) via one LLM structured-output
   call, plus two narrower flags on the same call — `explicit_human_request` (true only for the "wants a
   human/is frustrated about being reached" subset of `wants_lead`, not an ordinary service booking) and
-  `is_aggressive` (hostile/profane messages, logging only). Per user policy (2026-08-26), the manager is only
-  ever notified on Telegram for an explicit human request or a completed lead with contact details, never for
-  hostility alone — see "Staff notifications" below for how the *explicit human request* half of that policy
-  is actually wired (it wasn't, until 2026-08-27; `gate.py` previously only decided routing, and no code path
-  notified staff before the full name/phone/email form completed). Two cheap intercepts run first: if a
+  `is_aggressive` (hostile/profane messages). Both are classified and logged for visibility only, per user
+  policy: the manager is only ever notified on Telegram for a completed lead with contact details, not for
+  hostility alone (2026-08-26) and not for `explicit_human_request` on its own either, for now (2026-08-27 —
+  briefly wired up to notify immediately, same day rolled back: it was firing on messages like "call me on
+  Saturday", a call-timing question rather than a genuine escalation, and promising a callback the bot had no
+  contact details to make good on). See "Staff notifications" below. Two cheap intercepts run first: if a
   lead-capture form is already active (`lead_step` set, not `"completed"`), the LLM call is skipped entirely
   (`routing.py::route_after_gate` sends the turn straight to `lead_capture` regardless of what `gate` returns);
   a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply immediately after the bot itself asked
-  "want us to contact you?", without a model call — this shortcut also notifies staff directly (see below).
+  "want us to contact you?", without a model call.
 - **`lead_capture`** (`nodes/lead_capture.py`) — unchanged in spirit, but the pre-name-collection
   sequence was redesigned 2026-08-27 after real client feedback: a detected service now goes through
   `awaiting_consultation_type` (only for an ambiguous bare "consultation" — disambiguates legal vs.
@@ -98,9 +99,13 @@ nodes:
   and not back into `lead_capture` itself (a same-turn self-loop that used to hit `GraphRecursionError`,
   fixed 2026-08-26).
 - **`chat`** (`nodes/chat.py`, `chat_node`) — everything else: FAQ answering, identity questions, off-topic
-  redirects, and handoff-for-unanswerable-questions, all in one LLM node. Also fast-paths the exact-wording
-  'when will you call me?' response (with a weekend-mention special case) before any LLM call — this used
-  to only be guaranteed inside an active lead form; reinstated everywhere 2026-08-27. It reads
+  redirects, and handoff-for-unanswerable-questions, all in one LLM node. Also fast-paths call-timing questions
+  ("when will you call me?", weekend-mention special case) before any LLM call — this used to only be
+  guaranteed inside an active lead form; reinstated everywhere 2026-08-27, same day changed again to redirect
+  to the firm's own contact channels (`HANDOFF_MESSAGES`) rather than promise a callback: this intercept can
+  fire before any contact details are ever collected, so "we'll call you" was a promise the bot had no phone
+  number to keep. `lead_capture.py`'s `_check_call_timing` mirrors this exactly, same `HANDOFF_MESSAGES` reuse.
+  It reads
   `src/assets/company_info.md` fresh from disk on every call and injects the whole file into the system
   prompt — this is the single source of truth for services, pricing, required documents, contact/office/hours,
   and FAQ, in all four languages; edit that file and the very next message reflects the change, no reload or
@@ -130,22 +135,24 @@ message, add it to all four languages there rather than inlining a new string in
 ### Staff notifications
 
 `src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts directly via the aiogram `bot` instance,
-imported lazily inside each function to avoid a circular import with `src/bots/tgbot/bot.py`. Four functions
-are actually wired up:
-- `notify_manager_lead_telegram` — called from `nodes/lead_capture.py`'s completion step, once the full
-  name/phone/email form is done. **Not** try/except-guarded and runs before the "thank you" response is
-  built — if that Telegram send fails, the client who just finished the form gets no confirmation message at
-  all, not even a generic error (pre-existing, unrelated to the notification added below).
-- `notify_manager_human_request_telegram` (added 2026-08-27) — called from `nodes/gate.py`'s
-  `classify_lead_intent`, both from the LLM classification path (`wants_lead and explicit_human_request`) and
-  the deterministic "yes" shortcut (`is_affirmative_reply_to_manager_prompt`). Fires immediately when a client
-  explicitly wants a human to reach out — before any contact details are known, so the message just flags the
-  conversation for staff to open themselves. Complements `notify_manager_lead_telegram` above: a client can
-  trigger both (an early heads-up here, then the full-detail one later if they complete the form) — this is
-  intentional, not deduplicated. Deliberately wrapped in try/except in `gate.py` (`_notify_human_request`) so
-  a failed Telegram send never breaks the conversation turn for the client, unlike the unguarded call above.
-- `notify_manager_media_telegram` — called from `bots/tgbot/handlers/message.py` on any non-text message.
+imported lazily inside each function to avoid a circular import with `src/bots/tgbot/bot.py`. Two functions
+are actually wired up: `notify_manager_lead_telegram` (called from `nodes/lead_capture.py`'s completion step,
+once the full name/phone/email form is done — **not** try/except-guarded and runs before the "thank you"
+response is built, so a failed Telegram send leaves the client with no confirmation message at all) and
+`notify_manager_media_telegram` (called from `bots/tgbot/handlers/message.py` on any non-text message).
 
-Per user policy (2026-08-26), hostile messages are logged (`gate.py`'s `is_aggressive`) but no longer ping the
-manager — `notify_manager_aggressive_telegram` still exists in this file but nothing calls it anymore.
-`notify_manager_contacts_telegram` has never had a caller (pre-existing, unrelated to either change above).
+Two more functions exist in this file but are currently uncalled from anywhere, both rolled back the same day
+they were tried, for the same reason — a signal that seemed like "wants a human" fired on messages that
+weren't genuine escalations:
+- `notify_manager_aggressive_telegram` — per user policy (2026-08-26), hostile messages are still logged
+  (`gate.py`'s `is_aggressive`) but no longer ping the manager on their own.
+- `notify_manager_human_request_telegram` — briefly wired into `nodes/gate.py`'s `classify_lead_intent` on
+  2026-08-27 (both the LLM classification path and the deterministic "yes"-after-manager-prompt shortcut), to
+  notify staff immediately on `explicit_human_request`, before the form completes. Rolled back the same day:
+  it fired on messages like "call me on Saturday" (a call-timing question, not an escalation) and implied a
+  callback the bot had no contact details to make good on. `explicit_human_request` is still classified and
+  logged for visibility. If this comes back, `gate.py`'s `_notify_human_request` helper (also removed, see git
+  history) wrapped the call in try/except deliberately — unlike the unguarded `notify_manager_lead_telegram`
+  call above, a failed Telegram send here must never break the conversation turn for the client.
+
+`notify_manager_contacts_telegram` has never had a caller (pre-existing, unrelated to either rollback above).

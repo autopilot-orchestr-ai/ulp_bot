@@ -10,25 +10,8 @@ from src.ai.conversation_agent.routes import Route
 from src.ai.conversation_agent.state import AgentState
 from src.ai.llm import get_llm
 from src.bots.utils.language_detection import detect_lang
-from src.bots.utils.notify_stuff import notify_manager_human_request_telegram
 from src.config import settings
 from src.logger import log_event
-
-
-async def _notify_human_request(state: AgentState, lang: str, reason: str) -> None:
-    """Best-effort, non-blocking: a failed Telegram send must never break the
-    conversation turn for the client (unlike notify_manager_lead_telegram's
-    call in lead_capture.py, this one is deliberately guarded)."""
-    try:
-        await notify_manager_human_request_telegram(
-            client_id=state.incoming.client_id,
-            client_name=state.client_name,
-            text=state.incoming.text,
-            lang=lang,
-        )
-        log_event("human_request_notified", status="ok", reason=reason)
-    except Exception as exc:
-        log_event("human_request_notified", status="error", reason=reason, error=str(exc))
 
 _MANAGER_PROMPT_MARKERS = [
     "(ano / ne)", "(yes / no)", "(так / ні)", "(да / нет)",
@@ -99,7 +82,6 @@ async def classify_lead_intent(state: AgentState) -> dict:
 
     if is_affirmative_reply_to_manager_prompt(state.incoming.text, state.conversation_history):
         log_event("gate_classified", status="forced_lead", reason="user_confirmed_manager")
-        await _notify_human_request(state, lang, reason="confirmed_manager_prompt")
         return {"intent": "lead", "route": Route.LEAD, "language": lang}
 
     llm = get_llm(settings.llm_model)
@@ -131,19 +113,19 @@ async def classify_lead_intent(state: AgentState) -> dict:
     )
 
     # Logged for visibility, but not sent to staff on Telegram: per user
-    # policy (2026-08-26), the manager is only ever notified for an explicit
-    # human request or a completed lead with contact details - not for
-    # hostility alone.
+    # policy (2026-08-26), the manager is only ever notified for a
+    # completed lead with contact details, not for hostility alone.
     if result.is_aggressive:
         log_event("aggressive_message_flagged", status="ok", text=state.incoming.text)
 
-    # Per user policy (2026-08-27): an explicit request for a human should
-    # reach staff immediately, not only once the full name/phone/email form
-    # is completed minutes later - contact details aren't known yet here,
-    # so notify_manager_human_request_telegram just flags the conversation
-    # for staff to pick up themselves.
-    if result.wants_lead and result.explicit_human_request:
-        await _notify_human_request(state, lang, reason="gate_classified_explicit")
+    # explicit_human_request is still classified and logged above for
+    # visibility, but per user policy (2026-08-27) it no longer pages staff
+    # on its own, for now - it was firing on messages like "call me on
+    # Saturday" (a call-timing question, not a genuine escalation) and
+    # promising a callback the bot has no contact details to make good on.
+    # notify_manager_human_request_telegram (notify_stuff.py) still exists
+    # but nothing calls it anymore - same pattern as
+    # notify_manager_aggressive_telegram above.
 
     return {
         "intent": "lead" if result.wants_lead else "chat",

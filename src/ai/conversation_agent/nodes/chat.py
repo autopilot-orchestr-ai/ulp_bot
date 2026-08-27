@@ -3,7 +3,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.ai.conversation_agent.agent_rules.form_validator import FormValidator
-from src.ai.conversation_agent.agent_rules.strings import WEEKEND_NOTICES, WHEN_WILL_YOU_CALL_RESPONSE
+from src.ai.conversation_agent.agent_rules.strings import WEEKEND_NOTICES
 from src.ai.conversation_agent.prompts.chat import SYSTEM_PROMPT
 from src.ai.conversation_agent.prompts.handoff import HANDOFF_MESSAGES
 from src.ai.conversation_agent.state import AgentState
@@ -40,8 +40,12 @@ async def chat_node(state: AgentState) -> dict:
     # standalone node that handled it everywhere else was removed in the
     # 2026-08-26 graph refactor - an unintentional gap, not a deliberate
     # decision). No LLM call needed for this one.
+    # Per user policy (2026-08-27): this intercept fires before any contact
+    # details are ever collected, so it must not promise a callback we have
+    # no way to make - redirect to the firm's own contact channels instead
+    # (the same HANDOFF_MESSAGES used below), not a "we'll call you" promise.
     if FormValidator.is_asking_call_timing(state.incoming.text):
-        response = WHEN_WILL_YOU_CALL_RESPONSE.get(lang, WHEN_WILL_YOU_CALL_RESPONSE["en"])
+        response = HANDOFF_MESSAGES.get(lang, HANDOFF_MESSAGES["en"])
         if FormValidator.has_weekend_mention(state.incoming.text):
             response = WEEKEND_NOTICES.get(lang, WEEKEND_NOTICES["en"]) + response
         return {"response": response}

@@ -117,6 +117,27 @@ async def test_chat_call_timing_fast_path_prepends_weekend_notice(tmp_path):
     assert "8:00" in result["response"]
 
 
+async def test_chat_call_timing_fast_path_redirects_to_contact_channels_not_a_callback_promise(tmp_path):
+    """Regression: this intercept fires before any contact details are ever
+    collected (a fresh conversation, lead_step=None), so it must not promise
+    a callback the bot has no phone number to make good on - per user policy
+    (2026-08-27), it redirects to the firm's own phone/email/office instead."""
+    info_file = tmp_path / "company_info.md"
+    info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")
+    with patch(
+        "src.ai.conversation_agent.nodes.chat.get_llm"
+    ), patch(
+        "src.ai.conversation_agent.nodes.chat.settings"
+    ) as mock_settings:
+        mock_settings.company_info_path = str(info_file)
+        mock_settings.llm_model = "gpt-4o-mini"
+        result = await chat_node(_state("Зателефонуйте мені в суботу", language="uk"))
+    response = result["response"]
+    assert "+420 703 614 444" in response
+    assert "office@ak-ulp.cz" in response
+    assert "зв'яжеться" not in response.lower()  # the old callback-promise wording
+
+
 async def test_chat_non_call_timing_message_still_uses_llm(tmp_path):
     info_file = tmp_path / "company_info.md"
     info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")

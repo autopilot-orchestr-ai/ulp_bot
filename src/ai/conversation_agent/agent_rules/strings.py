@@ -155,11 +155,14 @@ MESSAGES = {
     }
 }
 
+# Per user policy (2026-08-27): no callback promise here - this notice is
+# followed directly by HANDOFF_MESSAGES (see chat.py / lead_capture.py),
+# which already tells the client how to reach the firm themselves.
 WEEKEND_NOTICES = {
-    "en": "⚠️ **Please note:** our office is open Monday to Friday. We are closed on weekends (Saturday and Sunday), but our team will contact you during working hours to schedule a convenient day!\n\n",
-    "cs": "⚠️ **Upozornění:** naše kancelář má otevřeno od pondělí do pátku. O víkendech (sobota a neděle) máme zavřeno, ale náš tým vás bude kontaktovat v pracovní době, abychom domluvili vyhovující den!\n\n",
-    "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницю. У вихідні (субота та неділя) ми зачинені, але наша команда зв'яжеться з Вами в робочий час для узгодження зручного дня!\n\n",
-    "ru": "⚠️ **Обратите внимание:** наш офис работает с понедельника по пятницу. В выходные (суббота и воскресенье) мы закрыты, но наша команда свяжется с Вами в рабочее время для согласования удобного дня!\n\n",
+    "en": "⚠️ **Please note:** our office is open Monday to Friday. We are closed on weekends (Saturday and Sunday).\n\n",
+    "cs": "⚠️ **Upozornění:** naše kancelář má otevřeno od pondělí do pátku. O víkendech (sobota a neděle) máme zavřeno.\n\n",
+    "uk": "⚠️ **Зверніть увагу:** наш офіс працює з понеділка по п'ятницю. У вихідні (субота та неділя) ми зачинені.\n\n",
+    "ru": "⚠️ **Обратите внимание:** наш офис работает с понедельника по пятницу. В выходные (суббота и воскресенье) мы закрыты.\n\n",
 }
 
 PHONE_REPROMPT = {
@@ -209,13 +212,6 @@ SERVICES_LIST_RESPONSE = {
     "ru": "Вот перечень услуг, которые мы предоставляем:\n\n⚖️ **Юридические консультации**\n🛂 **Визовые консультации**\n📄 **Заверенные судебные переводы**\n🔏 **Апостиль документов**\n📑 **Составление доверенностей**\n✍️ **Официальные заявления** (согласие на выезд, наследство)\n🏛️ **Справка об отсутствии судимости из Украины**\n💍 **Сопровождение при бракосочетании в Чехии**\n🗂️ **Дубликаты документов из Украины**\n\nКакая именно услуга вас интересует?",
     "cs": "Zde je seznam služeb, které poskytujeme:\n\n⚖️ **Právní konzultace**\n🛂 **Vízové konzultace**\n📄 **Soudní překlady**\n🔏 **Apostila**\n📑 **Plné moci**\n✍️ **Oficiální prohlášení** (souhlas s cestou, dědictví)\n🏛️ **Výpis z rejstříku trestů z Ukrajiny**\n💍 **Asistence při sňatku**\n🗂️ **Duplikáty dokumentů z Ukrajiny**\n\nO jakou službu máte zájem?",
     "en": "Here is the list of services we provide:\n\n⚖️ **Legal Consultations**\n🛂 **Visa Consultations**\n📄 **Certified Translations**\n🔏 **Apostille**\n📑 **Powers of Attorney**\n✍️ **Official Statements** (child travel consent, inheritance)\n🏛️ **Police Clearance Certificate from Ukraine**\n💍 **Marriage Support Package**\n🗂️ **Document Duplicates from Ukraine**\n\nWhich service are you interested in?"
-}
-
-WHEN_WILL_YOU_CALL_RESPONSE = {
-    "uk": "З Вами зв'яжуться в найкоротші строки під час нашого робочого дня з понеділка по п'ятницю між 8:00 та 17:00 годинами.",
-    "ru": "С Вами свяжутся в кратчайшие сроки в наши рабочие часы с понедельника по пятницу с 8:00 до 17:00.",
-    "cs": "Budeme vás kontaktovat co nejdříve během naší pracovní doby od pondělí do pátku mezi 8:00 a 17:00.",
-    "en": "We will contact you as soon as possible during our working hours, Monday to Friday between 8:00 and 17:00."
 }
 
 WORKING_HOURS_MSG = {

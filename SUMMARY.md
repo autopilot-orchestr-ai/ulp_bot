@@ -4,6 +4,37 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-27 14:50:13 +0200 — `03dfcd7`
+**Call-timing responses no longer promise a callback we can't make; rolled back the human-request manager notification**
+
+Found via live testing: "Зателефонуйте мені в суботу" got a reply promising "our team
+will contact you" - but this intercept fires before any contact details are ever
+collected (`lead_step=None`, no phone captured), so that promise couldn't actually be
+kept.
+
+- `chat.py`'s call-timing fast-path and `lead_capture.py`'s `_check_call_timing` now
+  return `HANDOFF_MESSAGES` (phone/email/office/hours - redirect the client to reach
+  out themselves) instead of the removed `WHEN_WILL_YOU_CALL_RESPONSE` ("we will
+  contact you" promise).
+- `WEEKEND_NOTICES` (still prepended when a weekend day is mentioned) dropped its own
+  "team will contact you" clause, keeping only the office-hours notice ahead of the
+  `HANDOFF_MESSAGES` body.
+- Per explicit user instruction, rolled back the `explicit_human_request` manager
+  notification added earlier today: it was firing on exactly this kind of message (a
+  call-timing question, not a genuine escalation) before there was ever anything urgent
+  to page staff about. Removed `gate.py`'s `_notify_human_request` helper and both call
+  sites, following the exact precedent already established for
+  `is_aggressive`/`notify_manager_aggressive_telegram` - `explicit_human_request` is
+  still classified and logged for visibility, `notify_manager_human_request_telegram`
+  still exists in `notify_stuff.py` but nothing calls it, for now.
+- `CLAUDE.md` updated for both changes.
+
+118 tests pass (was 119; -4 notify-specific tests replaced with 2 regression guards
+matching the `is_aggressive` pattern, +1 new test locking in the
+redirect-to-contact-channels behavior).
+
+---
+
 ## 2026-08-27 10:29:45 +0200 — `40e167b`
 **Notify manager immediately on an explicit human request, before the form completes**
 

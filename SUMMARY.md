@@ -4,6 +4,41 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 14:30:02 +0200 — `8bef538`
+**Cancellation no longer triggered by profanity/hostility detection alone**
+
+Found via live client testing: mid-name-collection, "Катерина Мат" (a truncated
+"Матвієнко"/"Матюк"-type surname) got the whole in-progress lead form wiped -
+`_check_cancel` fired the generic "скасував запис" message even though the text
+matches no `CANCEL_KEYWORDS`. Root cause: `is_user_cancelling` also
+short-circuited `True` on `is_profanity_or_hostile`, an LLM call asked "does this
+text contain profanity" - "мат" is itself the RU/UK noun for "swearing", so the
+classifier plausibly flagged the word rather than any actual hostility in the
+message. Not empirically confirmed against the real model (no API key in the
+diagnosing environment) - established by elimination against the other two
+candidate paths (`CANCEL_KEYWORDS`, the question-trap intercept), neither of
+which matches this text.
+
+Beyond this one false positive, gating a destructive action (`_RESET_FIELDS`
+drops name/phone/email/service) on a generic hostility classifier was
+inconsistent with the rest of this codebase's policy: `gate.py`'s
+`is_aggressive` is logged but never acts alone.
+
+Fix: `is_user_cancelling` now checks `CANCEL_KEYWORDS` only, no LLM call.
+Genuine profane cancellations ("та ну нахуй, скасуй все") are still caught since
+`CANCEL_KEYWORDS` matches regardless of tone; only the "flagged hostile but
+never asked to cancel" case stops wiping the form.
+`is_valid_name`/`extract_phone`/`extract_email` keep their
+`is_profanity_or_hostile` gate - a false positive there only costs a harmless
+reprompt, not the whole form. `tests/test_cancel_detection.py` added (3 new
+tests, including one asserting `get_llm` is never called from
+`is_user_cancelling` now). `CLAUDE.md` updated.
+
+122 tests pass (was 119, +3). Not yet verified live - pushed for the VPS
+auto-deploy, verification pending.
+
+---
+
 ## 2026-08-28 14:20:06 +0200 — `5fcb286`
 **Gate now treats a bare need for a named service (e.g. consultation) as wants_lead**
 

@@ -4,6 +4,37 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 15:44:03 +0200 — `80c04eb`
+**reset_thread_state crashed every first message after /start on a new thread**
+
+Deployed the `/start` reset feature (`141e780`), immediately broke in
+production: `ValidationError: 1 validation error for AgentState / incoming /
+Field required` on the client's very next message after `/start`.
+
+Root cause, confirmed with a local repro against the real graph + MemorySaver
+(not just the production traceback): `aupdate_state` only writes the channels
+named in its update dict - it never touched `incoming` (required, no default
+on `AgentState`), since a reset has no message to put there. For a thread that
+already had a real turn, that's harmless. But for a brand-new thread - the
+**common** case for `/start`, not an edge case: a new user, or literally any
+existing user right after a deploy restart wipes the in-process `MemorySaver`
+- `aupdate_state` creates the *first* checkpoint for that thread with
+`incoming` never written at all. The client's next real `ainvoke()` then
+merges its input onto that checkpoint instead of seeding a fresh full state,
+and `AgentState` validation fails before the turn can be answered.
+
+Fix: `reset_thread_state` now checks `graph.aget_state(config).values` first
+and no-ops if empty (no checkpoint yet - nothing to reset).
+
+`tests/test_graph_integration.py`: new regression test invoking reset then a
+real turn on a brand-new thread end-to-end against the real MemorySaver.
+`CLAUDE.md` updated.
+
+138 tests pass (was 137, +1). Not yet verified live - pushed for the VPS
+auto-deploy, verification pending.
+
+---
+
 ## 2026-08-28 15:35:17 +0200 — `141e780`
 **Chat replies stopped following the correctly-detected language, /start now resets state**
 

@@ -147,6 +147,26 @@ falls back to the conversation's existing language). Nearly every user-facing st
 constant, centralized in `src/ai/conversation_agent/agent_rules/strings.py` — when adding a new user-facing
 message, add it to all four languages there rather than inlining a new string in a node.
 
+`detect_lang` layers three fallbacks on top of raw `langdetect`, all in `language_detection.py`, all
+verified against the real library rather than assumed: (1) `_SHORT_WORDS_MAP` for greetings/yes-no, where
+langdetect is unreliable on short text regardless of language pair; (2) scanning every ranked candidate
+from `detect_langs` for the first one in `SUPPORTED_LANGUAGES`, since the #1 guess is often an unsupported
+language entirely (`"I need a lawyer"` → top guess `cy`/Welsh, with `en` a real but discarded second
+candidate); (3) for the one pair langdetect itself confuses — uk vs ru, which share nearly the whole
+Cyrillic alphabet — `_uk_ru_diagnostic_signal` overrides the statistical guess only when the text contains
+either a letter unique to one alphabet (`іїєґ` / `ыэъё`) or, since 2026-08-28, a word lexically exclusive to
+one language (мне/нужна/перевод/также vs мені/потрібна/переклад/також, etc.) — added after a client kept
+writing in Russian and the bot stayed stuck on Ukrainian: langdetect correctly said `ru` at 99.99%
+confidence, but the letter-only check had nothing to go on and fell back to the conversation's established
+language every time. Absent either signal, it keeps the established language rather than flip on a
+coin-toss. Diacritic-free Czech is a distinct, harder problem (also found 2026-08-28): langdetect doesn't
+even land near `cs`, it scatters unpredictably across sk/ro/hr/sl/pl/hu depending on the sentence, so there's
+no single override language to add. `detect_lang` falls back to `_czech_lexical_signal` instead — a curated Czech word list (`_CZECH_WORDS` in
+`language_detection.py`) matched with diacritics folded off both the list and the input, so it works whether
+or not the client typed them. `agent_rules/strings.py` had a same-purpose `_CZECH_WORDS`/`_CZECH_CHARS`/
+`_UK_CHARS` already sitting there, unused by anything (confirmed: zero importers) — removed rather than kept
+alongside the real one, to avoid two same-named lists silently diverging.
+
 ### Staff notifications
 
 `src/bots/utils/notify_stuff.py` sends manager-facing Telegram alerts directly via the aiogram `bot` instance,

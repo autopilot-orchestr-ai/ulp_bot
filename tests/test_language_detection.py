@@ -105,3 +105,53 @@ def test_detect_lang_still_switches_to_russian_with_diagnostic_letters():
 
 def test_detect_lang_still_switches_to_ukrainian_with_diagnostic_letters():
     assert detect_lang("Дякую, все зрозуміло", default="ru") == "uk"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Regression, client-reported 2026-08-28: langdetect confidently
+        # (99.99%) detects these as "ru" - unlike the ambiguous cases above,
+        # this is langdetect getting it right - but the old diagnostic-letter
+        # -only check discarded that and kept the established "uk" anyway,
+        # since neither sentence contains і/ї/є/ґ/ы/э/ъ/ё. Every word here
+        # (мне/нужна/нужно/перевод/также) is lexically exclusive to Russian -
+        # the Ukrainian equivalents are мені/потрібна/потрібно/переклад/також
+        # (different spelling) - so a word-level match is as safe as the
+        # existing letter-level one.
+        "Мне нужна консультация",
+        "Перевод документов также",
+    ],
+)
+def test_detect_lang_switches_to_russian_via_diagnostic_words(text):
+    assert detect_lang(text, default="uk") == "ru"
+
+
+def test_detect_lang_switches_to_ukrainian_via_diagnostic_words():
+    # "Дякую"/"чому" contain no і/ї/є/ґ either - this specifically exercises
+    # the new word-level signal, not the pre-existing letter one.
+    assert detect_lang("Дякую, чому так довго?", default="ru") == "uk"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Regression, client-reported 2026-08-28: diacritic-free Czech
+        # doesn't land anywhere near "cs" in langdetect's own ranked
+        # candidates - verified against the real library: these six
+        # sentences each got a different wrong top guess (sk/ro/hr/sl/pl/hu),
+        # never "cs", so the "scan all ranked candidates" fix above can't
+        # help here - there's no "cs" candidate to find.
+        "Potrebovala bych konzultaci",
+        "Konzultace",
+        "Chci se zeptat na cenu",
+        "Kolik to stoji?",
+        "Potrebuji pravnika",
+    ],
+)
+def test_detect_lang_falls_back_to_czech_lexical_signal(text):
+    assert detect_lang(text, default="uk") == "cs"
+
+
+def test_detect_lang_czech_lexical_signal_works_with_diacritics_too():
+    assert detect_lang("Potřebovala bych konzultaci", default="uk") == "cs"

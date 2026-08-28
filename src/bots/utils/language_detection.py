@@ -37,13 +37,65 @@ _SHORT_WORDS_MAP = {
 _UK_DIAGNOSTIC_CHARS = set("іїєґІЇЄҐ")
 _RU_DIAGNOSTIC_CHARS = set("ыэъёЫЭЪЁ")
 
+# Second-tier diagnostic signal, on top of the letters above: a lot of
+# common, everyday vocabulary is spelled identically in neither language's
+# diagnostic-only letters but is still lexically exclusive to one of them
+# (verified in production 2026-08-28: "Мне нужна консультация" and "Перевод
+# документов також" both detect as "ru" at 99.99% confidence via langdetect,
+# but were being discarded back to the conversation's established "uk"
+# purely because they contain no і/ї/є/ґ/ы/э/ъ/ё - the client kept writing
+# in Russian and the bot never switched). These word pairs are mutually
+# exclusive - not just "more common" in one language - so a single-word
+# match is as reliable as a diagnostic letter.
+_UK_DIAGNOSTIC_WORDS = {
+    "мені", "потрібно", "потрібна", "потрібен", "потрібні", "також",
+    "переклад", "перекладу", "перекладом", "дякую", "чому", "коли", "де",
+}
+_RU_DIAGNOSTIC_WORDS = {
+    "мне", "нужно", "нужна", "нужен", "нужны", "также",
+    "перевод", "перевода", "переводом", "спасибо", "почему", "когда", "где",
+}
+
 
 def _uk_ru_diagnostic_signal(text: str) -> str | None:
     if any(ch in _UK_DIAGNOSTIC_CHARS for ch in text):
         return "uk"
     if any(ch in _RU_DIAGNOSTIC_CHARS for ch in text):
         return "ru"
+    words = set(re.findall(r"[а-яёіїєґ]+", text.lower()))
+    if words & _UK_DIAGNOSTIC_WORDS:
+        return "uk"
+    if words & _RU_DIAGNOSTIC_WORDS:
+        return "ru"
     return None
+
+
+# langdetect struggles with Czech stripped of diacritics far worse than the
+# uk/ru case above: it doesn't even land on a wrong-but-close guess, it
+# scatters unpredictably across unrelated languages depending on the exact
+# sentence (verified in production 2026-08-28: "Potrebovala bych
+# konzultaci" -> sk:99.9%, "Chci se zeptat na cenu" -> ro:99.9%, "Kolik to
+# stoji?" -> hr:99.9%, "Potrebuji pravnika" -> sl:99.9% - six different
+# sentences, six different wrong top guesses, never "cs"). No single
+# override language fixes this the way the uk/ru letters do, so this is a
+# lexical fallback instead: a curated list of common Czech words, matched
+# with diacritics folded off both sides so it works whether or not the
+# client actually typed them.
+_CZECH_WORDS = {
+    "jo", "ano", "prosím", "ahoj", "chci", "mám", "zájem", "kde", "jak",
+    "nabízíte", "strojkem", "bych", "bys", "bychom", "byste",
+    "potřebovala", "potřeboval", "potřebuji", "potřebujeme",
+    "díky", "děkuji", "kolik", "stojí", "můžete", "zítra",
+    "konzultaci", "konzultace",
+}
+_CZECH_DIACRITIC_FOLD = str.maketrans("áčďéěíňóřšťúůýž", "acdeeinorstuuyz")
+_CZECH_WORDS_FOLDED = {w.translate(_CZECH_DIACRITIC_FOLD) for w in _CZECH_WORDS}
+
+
+def _czech_lexical_signal(text: str) -> bool:
+    tokens = re.findall(r"[a-záčďéěíňóřšťúůýž]+", text.lower())
+    folded = {t.translate(_CZECH_DIACRITIC_FOLD) for t in tokens}
+    return bool(folded & _CZECH_WORDS_FOLDED)
 
 
 def is_meaningful_text(text: str) -> bool:
@@ -86,6 +138,8 @@ def detect_lang(text: str, default: str = "uk") -> str:
         top = None
 
     if top is None:
+        if _czech_lexical_signal(text):
+            return "cs"
         return default
 
     if top in ("uk", "ru"):

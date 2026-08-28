@@ -25,10 +25,6 @@ _MONTHS = {
            "July", "August", "September", "October", "November", "December"],
 }
 
-_CZECH_CHARS = set("áčďéěíňóřšťúůýž")
-_CZECH_WORDS = {"jo", "ano", "prosím", "ahoj", "chci", "mám", "zájem", "kde", "jak", "nabízíte", "strojkem"}
-_UK_CHARS = set("іїєґІЇЄҐ")
-
 # --- Service & Intent Patterns ---
 
 # Maps multilingual regex matches to a standard Internal ID

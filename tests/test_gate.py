@@ -111,6 +111,27 @@ async def test_classify_lead_intent_routes_to_lead_when_llm_says_yes():
     assert result["intent"] == "lead"
 
 
+async def test_classify_lead_intent_routes_to_lead_for_bare_consultation_need():
+    """Regression guard for the 2026-08-28 client report: 'Потрібна
+    консультація' ('need a consultation') must route to lead_capture so its
+    awaiting_consultation_type step can ask legal vs. visa - not fall through
+    to chat's free-form reply. This only pins the routing plumbing given a
+    wants_lead=True classification; the prompt wording itself
+    (prompts/gate.py) is what actually has to get the real LLM to return
+    True here - not covered by this mocked test."""
+    state = _state("Потрібна консультація")
+    fake_structured = MagicMock()
+    fake_structured.ainvoke = AsyncMock(
+        return_value=LeadGateClassification(wants_lead=True, is_aggressive=False)
+    )
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_structured
+    with patch("src.ai.conversation_agent.nodes.gate.get_llm", return_value=fake_llm):
+        result = await classify_lead_intent(state)
+    assert result["route"] == Route.LEAD
+    assert result["intent"] == "lead"
+
+
 async def test_classify_lead_intent_does_not_notify_manager_for_aggression_alone():
     """Per user policy (2026-08-26): the manager is only ever notified on
     Telegram for an explicit human request or a completed lead with contact

@@ -86,7 +86,15 @@ nodes:
   lead-capture form is already active (`lead_step` set, not `"completed"`), the LLM call is skipped entirely
   (`routing.py::route_after_gate` sends the turn straight to `lead_capture` regardless of what `gate` returns);
   a deterministic heuristic also catches a bare "yes"/"так"/"ano" reply immediately after the bot itself asked
-  "want us to contact you?", without a model call.
+  "want us to contact you?", without a model call. `wants_lead` must be TRUE for a bare need-statement that
+  names one of the firm's actual services (e.g. "Потрібна консультація" - "need a consultation") even without
+  an explicit "book" verb - that's what hands off to `lead_capture`'s `awaiting_consultation_type`
+  disambiguation below. Client-reported 2026-08-28: the prompt's own FALSE example, "Потрібен юрист" ("need A
+  LAWYER" - vague, names no specific service), was being over-generalized by the model onto this
+  service-naming case too, so the message fell through to `chat` instead and got an inconsistent free-generated
+  reply (sometimes the full price list, sometimes just "call the manager", depending on conversation history -
+  see `chat`'s "don't repeat yourself" rule below) rather than the deterministic disambiguation question.
+  `prompts/gate.py` now spells out the distinction explicitly.
 - **`lead_capture`** (`nodes/lead_capture.py`) — unchanged in spirit, but the pre-name-collection
   sequence was redesigned 2026-08-27 after real client feedback: a detected service now goes through
   `awaiting_consultation_type` (only for an ambiguous bare "consultation" — disambiguates legal vs.

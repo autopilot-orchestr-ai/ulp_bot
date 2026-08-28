@@ -4,6 +4,35 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 14:20:06 +0200 — `5fcb286`
+**Gate now treats a bare need for a named service (e.g. consultation) as wants_lead**
+
+Found via live client testing: "Потрібна консультація" ("need a consultation") got
+`wants_lead=False` from `gate.py` and fell through to `chat`'s free-form reply
+instead of `lead_capture`'s deterministic `awaiting_consultation_type`
+disambiguation - the exact "bot never asks which type" flow that step was built for
+(`0e5ecec`). Symptom was also inconsistent across identical inputs: `chat` is
+LLM-generated, not templated, and has a "don't repeat yourself" rule, so the same
+message got the full price list the first time and just "call the manager" the
+second time in the same conversation thread.
+
+Root cause: `prompts/gate.py`'s own FALSE example, "Потрібен юрист" ("need A
+LAWYER" - vague, names no specific service), was being over-generalized by the model
+onto "Потрібна консультація" too, even though the latter names one of the firm's
+actual bookable services.
+
+Fix: `prompts/gate.py` now spells out the distinction explicitly - a need-statement
+naming a specific service (consultation, POA, apostille, etc.) is `wants_lead=TRUE`
+even without an explicit "book" verb; a vague need ("a lawyer", generically) stays
+FALSE. `tests/test_gate.py` gets a regression test pinning the routing plumbing for
+this case (mocked LLM output, per existing test style - doesn't verify the real
+model's prompt-following). `CLAUDE.md` updated with the same distinction.
+
+119 tests pass (was 118, +1). Not yet verified live - client can only test on the
+VPS; pushed to `main` for the auto-deploy, verification pending.
+
+---
+
 ## 2026-08-27 14:50:13 +0200 — `03dfcd7`
 **Call-timing responses no longer promise a callback we can't make; rolled back the human-request manager notification**
 

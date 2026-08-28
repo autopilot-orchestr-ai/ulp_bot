@@ -4,6 +4,34 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 15:17:19 +0200 — `159a46d`
+**awaiting_consultation_type now handles a pivot to a different service**
+
+Client-reported live bug: mid-disambiguation ("legal or visa consultation?"), the
+client answered "Перевод интересует" ("interested in translation") - a completely
+different, concrete service - and the bot just re-asked the same legal-vs-visa
+question, ignoring what was actually said.
+
+Root cause: `_step_awaiting_consultation_type` only ever checked the reply against
+`("legal_consultation", "visa_consultation")`. `FormValidator.detect_service`
+correctly resolves "Перевод интересует" to `"translation"`, but that fell through
+both the consultation-type branch and the `is_user_asking_question` branch
+straight into the "still ambiguous, reprompt" fallback.
+
+Fix: when `detect_service` finds a concrete, non-ambiguous service that isn't
+legal/visa consultation, hand off to `_step_start`'s own service logic (already
+handles `has_price_been_shown` correctly) instead of re-prompting. `lead_step` is
+explicitly forced to `None` on this path - `_step_start` doesn't always set it
+itself, and this call arrives from a non-`None` step, so leaving it unset would
+strand the form on `awaiting_consultation_type` forever.
+
+`tests/test_lead_capture_flow.py`: 2 new regression tests. `CLAUDE.md` updated.
+
+133 tests pass (was 131, +2). Not yet verified live - pushed for the VPS
+auto-deploy, verification pending.
+
+---
+
 ## 2026-08-28 15:12:56 +0200 — `77ca8f1`
 **Bot got stuck in one language despite clear uk/ru switches and diacritic-free Czech**
 

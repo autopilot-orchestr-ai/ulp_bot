@@ -102,6 +102,28 @@ async def test_step_awaiting_consultation_type_hands_off_on_question():
     assert result.get("route_to_llm") is True
 
 
+async def test_step_awaiting_consultation_type_pivots_to_different_service_no_price_shown():
+    """Regression, client-reported 2026-08-28: "Перевод интересует"
+    ("interested in translation") while still being asked legal-vs-visa must
+    switch to the translation service instead of re-asking the now-irrelevant
+    consultation-type question."""
+    state = _state("Перевод интересует", lead_step="awaiting_consultation_type")
+    result = await _step_awaiting_consultation_type(state)
+    assert result.get("route_to_llm") is True
+    assert result["current_service"] == "translation"
+    assert result["lead_step"] is None
+
+
+async def test_step_awaiting_consultation_type_pivots_to_different_service_price_shown():
+    history = [{"role": "assistant", "content": "Translation costs 500 CZK"}]
+    state = _state(
+        "Перевод интересует", lead_step="awaiting_consultation_type", history=history,
+    )
+    result = await _step_awaiting_consultation_type(state)
+    assert result["current_service"] == "translation"
+    assert result["lead_step"] == "awaiting_contact_confirmation"
+
+
 async def test_step_awaiting_consultation_type_resumes_from_current_service_after_chat_handoff():
     """Regression: after resolving to legal_consultation and handing off to
     chat for pricing (current_service set, step unchanged), the next reply

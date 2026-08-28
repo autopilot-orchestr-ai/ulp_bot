@@ -113,6 +113,10 @@ nodes:
   noun for "swearing", and the hostility classifier flagged the word rather than any actual abuse in the
   message. `is_valid_name`/`extract_phone`/`extract_email` still gate on `is_profanity_or_hostile` -
   a false positive there only costs a harmless reprompt, not the whole form, so they were left as-is.
+  `_step_awaiting_consultation_type` only ever looked for `legal_consultation`/`visa_consultation` in the
+  reply; as of 2026-08-28 it also detects a pivot to a completely different concrete service (e.g. "Перевод
+  интересует" - translation - while still being asked legal-vs-visa, client-reported) and hands off to
+  `_step_start`'s own service logic instead of re-asking the now-irrelevant disambiguation question.
 - **`chat`** (`nodes/chat.py`, `chat_node`) — everything else: FAQ answering, identity questions, off-topic
   redirects, and handoff-for-unanswerable-questions, all in one LLM node. Also fast-paths call-timing questions
   ("when will you call me?", weekend-mention special case) before any LLM call — this used to only be

@@ -181,6 +181,21 @@ async def _step_awaiting_consultation_type(state: AgentState) -> dict:
             ),
         }
 
+    if detected_id and detected_id != "consultation_ambiguous":
+        # The user pivoted to a different, concrete service entirely (e.g.
+        # "Перевод интересует" while we were still asking legal vs. visa
+        # consultation - client-reported 2026-08-28) - hand off to
+        # _step_start's own service logic instead of re-asking a question
+        # that's no longer relevant. _step_start doesn't always set
+        # lead_step itself (it only does on the price-shown branch), so
+        # force it explicitly here - unlike a fresh _step_start call, we're
+        # coming from a non-None step and must not leave it stuck on
+        # "awaiting_consultation_type".
+        state.current_service = detected_id
+        result = await _step_start(state)
+        result.setdefault("lead_step", None)
+        return result
+
     if await FormValidator.is_user_asking_question(state.incoming.text):
         return {"route_to_llm": True}
 

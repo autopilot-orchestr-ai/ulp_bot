@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from src.ai.conversation_agent.nodes.chat import chat_node
 from src.ai.conversation_agent.state import AgentState
@@ -136,6 +136,37 @@ async def test_chat_call_timing_fast_path_redirects_to_contact_channels_not_a_ca
     assert "+420 703 614 444" in response
     assert "office@ak-ulp.cz" in response
     assert "зв'яжеться" not in response.lower()  # the old callback-promise wording
+
+
+async def test_chat_reinforces_language_right_before_the_current_turn(tmp_path):
+    """Regression, client-reported 2026-08-28: a long conversation history
+    that had drifted to mostly one language (uk) caused the model to keep
+    answering in uk even when this turn's language was correctly detected
+    as cs/ru - a single instruction early in a long context gets diluted by
+    a strong pattern later in it. The fix repeats the language instruction
+    as the very last message before the current human turn."""
+    info_file = tmp_path / "company_info.md"
+    info_file.write_text("## English (en)\nWe offer legal consultations.", encoding="utf-8")
+    reply = AIMessage(content="ok", tool_calls=[])
+    fake_llm = _fake_llm(reply)
+    with patch(
+        "src.ai.conversation_agent.nodes.chat.get_llm", return_value=fake_llm
+    ), patch(
+        "src.ai.conversation_agent.nodes.chat.settings"
+    ) as mock_settings:
+        mock_settings.company_info_path = str(info_file)
+        mock_settings.llm_model = "gpt-4o-mini"
+        state = _state("Konzultace", language="cs")
+        state.conversation_history = [
+            {"role": "user", "content": "Добрий день"},
+            {"role": "assistant", "content": "Добрий день! Чим можу допомогти?"},
+        ]
+        await chat_node(state)
+    sent_messages = fake_llm.ainvoke.call_args[0][0]
+    assert isinstance(sent_messages[-1], HumanMessage)
+    reminder = sent_messages[-2]
+    assert "cs" in reminder.content
+    assert reminder.content != sent_messages[0].content
 
 
 async def test_chat_non_call_timing_message_still_uses_llm(tmp_path):

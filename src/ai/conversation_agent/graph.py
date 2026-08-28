@@ -55,3 +55,34 @@ def build_graph() -> StateGraph:
 
 
 graph = build_graph()
+
+
+async def reset_thread_state(client_id: str) -> None:
+    """Clears the LangGraph per-user state kept by the MemorySaver
+    checkpointer (thread_id=client_id) - lead_step, current_service, and
+    any collected contact fields. Used by /start (client-reported
+    2026-08-28: they typed /start expecting a clean slate before testing a
+    language switch, but /start was purely a cosmetic welcome message that
+    touched no state at all - an abandoned lead form or a stale
+    current_service would silently carry over into what should have been a
+    fresh start).
+
+    NOTE: this only clears in-process graph state. It does NOT clear
+    conversation_history, which lives in the external Core API
+    (src/api_client/core_api.py) and has no delete/reset endpoint - chat's
+    LLM context still includes prior turns after /start. A true "wipe the
+    visible chat history" reset would need a Core API change, out of scope
+    for this repo.
+    """
+    config = {"configurable": {"thread_id": str(client_id)}}
+    await graph.aupdate_state(
+        config,
+        {
+            "lead_step": None,
+            "current_service": None,
+            "client_name": None,
+            "client_phone": None,
+            "client_email": None,
+            "language": None,
+        },
+    )

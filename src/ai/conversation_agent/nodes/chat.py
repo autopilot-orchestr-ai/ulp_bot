@@ -61,6 +61,23 @@ async def chat_node(state: AgentState) -> dict:
             content=SYSTEM_PROMPT.format(lang=lang, company_info=_read_company_info())
         ),
         *_history_messages(state.conversation_history),
+        # Repeated right before the current turn, not just once at the top -
+        # client-reported 2026-08-28: earlier turns in a long-running
+        # conversation had drifted to mostly one language (uk), and even
+        # though this turn's detected language was correctly cs/ru (see
+        # `response_sent` logs), the model kept answering in uk anyway,
+        # imitating the dominant pattern in the history instead of the
+        # system prompt's language instruction - a long history dilutes an
+        # instruction that only appears once, early in the context. Placing
+        # it again as the very last thing before generation fixes that
+        # regardless of how many prior turns used a different language.
+        SystemMessage(
+            content=(
+                f"Reminder: earlier turns above may be in a different language. "
+                f"Reply to the client's message below exclusively in {lang}, "
+                f"regardless of what language previous turns used."
+            )
+        ),
         HumanMessage(content=state.incoming.text),
     ]
 

@@ -69,6 +69,49 @@ async def test_lead_capture_can_hand_off_to_chat_mid_form():
     assert result["response"] == "8 to 5, Mon-Fri"
 
 
+async def test_reset_thread_state_clears_lead_form_progress():
+    """Regression, client-reported 2026-08-28: /start used to touch no
+    conversation state at all, so an abandoned lead form (lead_step,
+    current_service) silently carried over into what a client expected to
+    be a fresh start. reset_thread_state looks up the module-level `graph`
+    name at call time (not a closure captured at definition time), so
+    patching that name to a freshly-built, stub-wired graph is enough to
+    test it end-to-end against a real MemorySaver checkpointer without
+    hitting the real LLM."""
+    import src.ai.conversation_agent.graph as graph_module
+
+    thread_id = "reset-test-1"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    with patch(
+        "src.ai.conversation_agent.graph.classify_lead_intent",
+        new_callable=AsyncMock,
+        return_value={"intent": "lead", "route": Route.LEAD, "language": "uk"},
+    ), patch(
+        "src.ai.conversation_agent.graph.lead_capture_node",
+        new_callable=AsyncMock,
+        return_value={
+            "response": "what is your name?",
+            "lead_step": "awaiting_name",
+            "current_service": "apostille",
+            "route": Route.LEAD,
+        },
+    ):
+        test_graph = graph_module.build_graph()
+        with patch.object(graph_module, "graph", test_graph):
+            await test_graph.ainvoke({"incoming": _incoming("Хочу апостиль")}, config=config)
+
+            before = await test_graph.aget_state(config)
+            assert before.values.get("lead_step") == "awaiting_name"
+            assert before.values.get("current_service") == "apostille"
+
+            await graph_module.reset_thread_state(thread_id)
+
+            after = await test_graph.aget_state(config)
+            assert after.values.get("lead_step") is None
+            assert after.values.get("current_service") is None
+
+
 async def test_lead_capture_route_lead_terminates_the_turn_not_loops():
     """Regression test for the GraphRecursionError bug fixed 2026-08-26:
     lead_capture returning Route.LEAD (the default outcome for a reprompt or

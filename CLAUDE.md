@@ -62,11 +62,22 @@ vector search or embeddings involved — the whole file is injected into the sys
 entry point all bots funnel through** (so a future WhatsApp/Instagram bot — stub dirs already exist under
 `src/bots/whatsbot`, `src/bots/instabot` — would reuse it):
 
-1. Fetch/create a conversation and recent history from the Core API (`core_api.py`).
+1. Fetch/create a conversation and recent history from the Core API (`core_api.py`) — capped to the last 10
+   messages (`get_chat_history(..., limit=10)`).
 2. Invoke the LangGraph `graph` (`src/ai/conversation_agent/graph.py`), keyed by `thread_id=client_id` so
    LangGraph's own `MemorySaver` checkpointer keeps per-user graph state (e.g. `lead_step`) across turns —
    this is a separate, in-process memory layer from the Core API's persisted chat history.
 3. Persist the bot's reply back to the Core API and return the text to send.
+
+`/start` (`src/bots/tgbot/handlers/start.py`) never reaches `handle_incoming` at all — aiogram routes it to
+`cmd_start` first (`start_router` is registered ahead of `message_router` in `handlers/__init__.py`) — so it
+sends a welcome message and, as of 2026-08-28, calls `graph.py`'s `reset_thread_state(client_id)` to clear
+the LangGraph state above (`lead_step`/`current_service`/contact fields) via `aupdate_state`, try/except
+-guarded so a reset failure can never swallow the welcome message. Before that date it was purely cosmetic —
+touched no state at all (client-reported: they typed `/start` expecting a clean slate before testing a
+language switch and nothing about their conversation changed). It still can't clear the Core API-persisted
+`conversation_history` itself - that service has no delete/reset endpoint, so `chat`'s LLM context still
+includes prior turns after `/start`; only an actual Core API change could fix that part.
 
 ### The conversation graph
 
@@ -132,7 +143,12 @@ nodes:
   `core_api.store_unanswered_question` against the *real* `conversation_id` — the old `escalation.py` this
   replaced stubbed a throwaway `uuid4()` here and silently orphaned every logged question). Calling it
   short-circuits straight to a canned `HANDOFF_MESSAGES[lang]` reply (`prompts/handoff.py`) instead of
-  letting the model free-generate what gets promised to a client.
+  letting the model free-generate what gets promised to a client. The message list sent to the LLM repeats
+  the `{lang}` instruction a second time, as its own `SystemMessage` right before the current human turn (not
+  just once at the top) — added 2026-08-28 after a client's long-running conversation (many turns, almost all
+  Ukrainian) kept getting Ukrainian replies even on turns `gate.py` had correctly detected as cs/ru: an
+  instruction that appears only once, early in a long context, gets diluted by a strong pattern later in that
+  same context, and the model imitated the dominant history language instead of following it.
 
 Graph wiring (`graph.py` + `routing.py`): `gate` is the entry point and conditionally routes to `lead_capture`
 or `chat`. `lead_capture` can hand back to `chat` or end the turn. `chat` always ends the turn.

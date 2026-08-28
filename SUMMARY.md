@@ -4,6 +4,22 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 14:35:55 +0200 — `e5b3f1d`
+**uk/ru identity line says "адвокатське бюро" (law office), not "фірма"**
+
+Client feedback on live testing: "фірма"/"фирма" (a generic business/company
+word) reads wrong for a law practice - asked for "бюро" or "адвокатське бюро"
+instead. `company_info.md`'s uk/ru "Хто я"/"Кто я" identity lines now match the
+cs section, which already said "advokátní kanceláře" for the same sentence.
+ru also needed its participle re-agreed to neuter
+("специализирующейся" → "специализирующегося") since "бюро" is a neuter
+indeclinable noun, unlike the feminine "фирма" it replaced.
+
+No code change - `company_info.md` is read fresh on every `chat` turn, so this
+takes effect on the very next message, no restart needed.
+
+---
+
 ## 2026-08-28 14:30:02 +0200 — `8bef538`
 **Cancellation no longer triggered by profanity/hostility detection alone**
 

@@ -4,6 +4,41 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 15:12:56 +0200 — `77ca8f1`
+**Bot got stuck in one language despite clear uk/ru switches and diacritic-free Czech**
+
+Client-reported live bug: after one misdetected message, every following reply
+stayed in Ukrainian even though the client kept typing in clearly different
+languages (Czech, then Russian, then Russian again). Two distinct root causes,
+verified against the real langdetect library directly (it's a local statistical
+model, no LLM/API key needed):
+
+1. **uk/ru**: "Мне нужна консультация" and "Перевод документов також" detect as
+   "ru" at 99.99% confidence, but the existing uk/ru disambiguation only trusted
+   that guess when the text contained a letter unique to one Cyrillic alphabet
+   subset (`іїєґ` / `ыэъё`). Neither sentence does - the words themselves
+   (мне/нужна/перевод/также) are lexically exclusive to Russian but use no
+   diagnostic letter - so it kept falling back to the conversation's
+   already-established "uk" every time. Fix: `_uk_ru_diagnostic_signal` gets a
+   second-tier word-list signal, same override mechanism, covering vocabulary
+   the letters miss.
+2. **cs**: diacritic-free Czech doesn't land near "cs" in langdetect's own
+   ranked candidates at all - six real test sentences got six different wrong
+   top guesses (sk/ro/hr/sl/pl/hu), never "cs". Fix: a curated Czech word list
+   (`_CZECH_WORDS`) as a lexical fallback when no supported language is among
+   langdetect's candidates at all, diacritics folded off both sides so it
+   matches with or without them. Removed a same-purpose, never-wired-in
+   `_CZECH_WORDS`/`_CZECH_CHARS`/`_UK_CHARS` that was already sitting unused in
+   `agent_rules/strings.py`, rather than leaving two lists to diverge.
+
+`tests/test_language_detection.py`: 9 new regression tests. `CLAUDE.md`'s
+Localization section rewritten with the full fallback chain.
+
+131 tests pass (was 122, +9). Not yet verified live - pushed for the VPS
+auto-deploy, verification pending.
+
+---
+
 ## 2026-08-28 14:35:55 +0200 — `e5b3f1d`
 **uk/ru identity line says "адвокатське бюро" (law office), not "фірма"**
 

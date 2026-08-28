@@ -103,8 +103,18 @@ Reply ONLY with "TRUE" if it contains profanity, or "FALSE" if it is clean."""
         if not text:
             return False
         text_lower = text.lower().strip()
-        if await cls.is_profanity_or_hostile(text_lower):
-            return True
+        # Deliberately NOT gated on is_profanity_or_hostile (unlike
+        # is_valid_name/extract_phone/extract_email below, where a false
+        # positive there just triggers a harmless reprompt). Cancelling
+        # wipes the whole in-progress form (_RESET_FIELDS), so it must only
+        # fire on actual cancel intent - a client-reported 2026-08-28 false
+        # positive had this branch nuking an active booking because the
+        # surname "Катерина Мат" (a truncated "Матвієнко"/"Матюк"-type
+        # name) contains "мат", which is itself the RU/UK noun for
+        # "swearing" - the hostility classifier flagged the word, not any
+        # actual abuse in the message. Matches the rest of the codebase's
+        # policy of never taking a destructive/escalating action on
+        # profanity/aggression alone (see gate.py's is_aggressive).
         return any(kw in text_lower for kw in CANCEL_KEYWORDS)
 
     @classmethod

@@ -105,7 +105,14 @@ nodes:
   question instead of answering, or end the turn (`Route.END`) after a reprompt or a completed step —
   see `routing.py::route_after_lead_capture`'s docstring for why `Route.LEAD` must map to `END` here
   and not back into `lead_capture` itself (a same-turn self-loop that used to hit `GraphRecursionError`,
-  fixed 2026-08-26).
+  fixed 2026-08-26). Its `_check_cancel` intercept (`FormValidator.is_user_cancelling`) resets the whole
+  in-progress form (`_RESET_FIELDS` — name/phone/email/service all dropped), so as of 2026-08-28 it is
+  judged purely by `CANCEL_KEYWORDS`, no LLM call involved — it used to also short-circuit true on
+  `is_profanity_or_hostile`, which destroyed an active booking on a client-reported false positive: the
+  surname "Катерина Мат" (a truncated "Матвієнко"/"Матюк"-type name) contains "мат", itself the RU/UK
+  noun for "swearing", and the hostility classifier flagged the word rather than any actual abuse in the
+  message. `is_valid_name`/`extract_phone`/`extract_email` still gate on `is_profanity_or_hostile` -
+  a false positive there only costs a harmless reprompt, not the whole form, so they were left as-is.
 - **`chat`** (`nodes/chat.py`, `chat_node`) — everything else: FAQ answering, identity questions, off-topic
   redirects, and handoff-for-unanswerable-questions, all in one LLM node. Also fast-paths call-timing questions
   ("when will you call me?", weekend-mention special case) before any LLM call — this used to only be

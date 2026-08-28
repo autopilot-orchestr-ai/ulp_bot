@@ -4,6 +4,46 @@ Changelog of fixes and infrastructure changes made to this repo, with commit has
 
 ---
 
+## 2026-08-28 15:35:17 +0200 — `141e780`
+**Chat replies stopped following the correctly-detected language, /start now resets state**
+
+Client-reported live bug: `gate.py` correctly detected cs/ru for several turns
+(logged as such), but `chat_node`'s replies kept coming back in Ukrainian
+anyway. The client had typed `/start` beforehand, expecting a clean slate
+before testing a language switch - it did nothing.
+
+Two distinct fixes:
+
+1. **`chat.py`**: `SYSTEM_PROMPT`'s "reply in `{lang}`" instruction only
+   appeared once, at the top of a long message list that included the full -
+   by then mostly Ukrainian - conversation history (capped to the Core API's
+   last-10-messages fetch in `handle_incoming`, still enough turns to
+   dominate). A single early instruction gets diluted by a strong pattern
+   later in the same context, and the model imitated the history's language
+   instead of the instruction. Fix: repeat the `{lang}` instruction as its own
+   `SystemMessage` right before the current human turn, so it's the most
+   recent thing the model sees, not just the first.
+2. **`start.py`/`graph.py`**: `/start` was purely a cosmetic welcome message -
+   it never called `handle_incoming` at all (aiogram routes it to `cmd_start`
+   first), so it touched no state whatsoever. An abandoned lead form
+   (`lead_step`, `current_service`, contact fields) silently carried over into
+   what a client expected to be a fresh start. Added `graph.py`'s
+   `reset_thread_state(client_id)`, which clears that LangGraph-checkpointed
+   state via `aupdate_state`; wired into `cmd_start`, try/except-guarded so a
+   reset failure can never swallow the welcome message. Documented limitation:
+   this cannot clear the `conversation_history` persisted in the external Core
+   API (no delete/reset endpoint there) - `chat`'s LLM context still includes
+   prior turns after `/start`; only fix #1 addresses the actual reported
+   symptom on its own.
+
+`tests/test_chat.py`, `tests/test_start.py` (new), `tests/test_graph_integration.py`:
+4 new regression tests. `CLAUDE.md` updated.
+
+137 tests pass (was 133, +4). Not yet verified live - pushed for the VPS
+auto-deploy, verification pending.
+
+---
+
 ## 2026-08-28 15:17:19 +0200 — `159a46d`
 **awaiting_consultation_type now handles a pivot to a different service**
 

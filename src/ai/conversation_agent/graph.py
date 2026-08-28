@@ -75,6 +75,26 @@ async def reset_thread_state(client_id: str) -> None:
     for this repo.
     """
     config = {"configurable": {"thread_id": str(client_id)}}
+
+    # Regression, verified 2026-08-28: aupdate_state only writes the
+    # channels named in its dict - it never touches `incoming` (required,
+    # no default on AgentState) since a reset has no message to put there.
+    # For a thread with an existing checkpoint that's harmless (`incoming`
+    # already holds a value from a real turn, untouched by this partial
+    # write). But for a brand-new thread - genuinely the most common case
+    # for /start: a new user, or any user right after a deploy restart
+    # wipes this in-process MemorySaver - aupdate_state creates the FIRST
+    # checkpoint for that thread with `incoming` never written at all. The
+    # next real ainvoke() then merges its input onto that checkpoint rather
+    # than treating it as a fresh full state, and crashes on `AgentState`
+    # validation ("incoming: Field required") before the client's very
+    # first message could be answered - confirmed via a local repro against
+    # the real graph + MemorySaver, not just the production traceback.
+    # Skip entirely when there's no existing checkpoint - a fresh thread
+    # already starts at every field's proper default, nothing to reset.
+    if not (await graph.aget_state(config)).values:
+        return
+
     await graph.aupdate_state(
         config,
         {

@@ -75,7 +75,14 @@ sends a welcome message and, as of 2026-08-28, calls `graph.py`'s `reset_thread_
 the LangGraph state above (`lead_step`/`current_service`/contact fields) via `aupdate_state`, try/except
 -guarded so a reset failure can never swallow the welcome message. Before that date it was purely cosmetic —
 touched no state at all (client-reported: they typed `/start` expecting a clean slate before testing a
-language switch and nothing about their conversation changed). It still can't clear the Core API-persisted
+language switch and nothing about their conversation changed). `reset_thread_state` first checks
+`graph.aget_state(config).values` and no-ops if it's empty (no checkpoint yet) — `aupdate_state` only writes
+the channels named in its dict, never `incoming` (required, no default on `AgentState`, since a reset has no
+message to put there), and for a thread with zero prior checkpoints that leaves `incoming` never-written; the
+client's very next real message then crashed the whole turn with a pydantic `ValidationError` before being
+answered at all — found live immediately after this feature first shipped, since a brand-new thread (a new
+user, or literally any existing user right after a deploy restart wipes the in-process `MemorySaver`) is the
+*common* case for `/start`, not an edge case. It still can't clear the Core API-persisted
 `conversation_history` itself - that service has no delete/reset endpoint, so `chat`'s LLM context still
 includes prior turns after `/start`; only an actual Core API change could fix that part.
 

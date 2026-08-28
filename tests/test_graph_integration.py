@@ -112,6 +112,43 @@ async def test_reset_thread_state_clears_lead_form_progress():
             assert after.values.get("current_service") is None
 
 
+async def test_reset_thread_state_on_brand_new_thread_does_not_break_the_next_turn():
+    """Regression, found live 2026-08-28 right after deploying the fix
+    above: a client typed /start as their very first-ever interaction (also
+    the case for every existing user right after a deploy restart, which
+    wipes the in-process MemorySaver) - reset_thread_state's aupdate_state
+    call created a checkpoint whose `incoming` channel (required, no
+    default on AgentState) had never been written, and the client's next
+    real message then crashed with a pydantic ValidationError
+    ("incoming: Field required") before it could be answered at all,
+    confirmed against the real graph + MemorySaver. reset_thread_state must
+    now skip entirely when no checkpoint exists yet, so the first real turn
+    still goes through."""
+    import src.ai.conversation_agent.graph as graph_module
+
+    thread_id = "reset-test-brand-new"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    with patch(
+        "src.ai.conversation_agent.graph.classify_lead_intent",
+        new_callable=AsyncMock,
+        return_value={"intent": "chat", "route": Route.CHAT, "language": "uk"},
+    ), patch(
+        "src.ai.conversation_agent.graph.chat_node",
+        new_callable=AsyncMock,
+        return_value={"response": "hi"},
+    ):
+        test_graph = graph_module.build_graph()
+        with patch.object(graph_module, "graph", test_graph):
+            # /start before this thread has ever had a real turn.
+            await graph_module.reset_thread_state(thread_id)
+
+            result = await test_graph.ainvoke(
+                {"incoming": _incoming("Привіт")}, config=config
+            )
+    assert result["response"] == "hi"
+
+
 async def test_lead_capture_route_lead_terminates_the_turn_not_loops():
     """Regression test for the GraphRecursionError bug fixed 2026-08-26:
     lead_capture returning Route.LEAD (the default outcome for a reprompt or
